@@ -12,6 +12,18 @@ export default function App() {
   const [selected, setSelected] = useState(0);
   const [apps, setApps] = useState<Result[]>([]);
   const [files, setFiles] = useState<Result[]>([]);
+  const [clips, setClips] = useState<Result[]>([]);
+
+  useEffect(() => {
+    invoke<string[]>("clipboard_history").then((list) =>
+      setClips(list.map((text, i) => ({
+        id: "clip:" + i,
+        type: "clipboard" as const,
+        title: text.replace(/\s+/g, " ").slice(0, 80),
+        run: async () => { getCurrentWindow().hide(); await invoke("paste_text", { text }); },
+      })))
+    );
+  }, []);
 
   useEffect(() => {
     invoke<{ name: string; path: string }[]>("list_apps").then((list) =>
@@ -41,10 +53,11 @@ export default function App() {
     return () => { cancelled = true; };
   }, [query]);
 
-  const results = useMemo(
-    () => [...fuzzyFilter(query, apps, (r) => r.title), ...files],
-    [query, apps, files]
-  );
+  const results = useMemo(() => {
+    const base = [...fuzzyFilter(query, apps, (r) => r.title), ...files];
+    const c = query.trim() ? fuzzyFilter(query, clips, (r) => r.title) : [];
+    return [...base, ...c];
+  }, [query, apps, files, clips]);
 
   useEffect(() => setSelected(0), [query]);
 
