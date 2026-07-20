@@ -13,10 +13,21 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const [managing, setManaging] = useState(false);
+  const [mode, setMode] = useState<"root" | "clipboard">("root");
   const [apps, setApps] = useState<Result[]>([]);
   const [files, setFiles] = useState<Result[]>([]);
   const [clips, setClips] = useState<Result[]>([]);
   const [snips, setSnips] = useState<Result[]>([]);
+
+  const loadClips = () =>
+    invoke<string[]>("clipboard_history").then((list) =>
+      setClips(list.map((text, i) => ({
+        id: "clip:" + i,
+        type: "clipboard" as const,
+        title: text.replace(/\s+/g, " ").slice(0, 80),
+        run: async () => { getCurrentWindow().hide(); await invoke("paste_text", { text }); },
+      })))
+    );
 
   useEffect(() => {
     invoke<{ keyword: string; text: string }[]>("list_snippets").then((list) =>
@@ -31,17 +42,6 @@ export default function App() {
   }, [managing]);
 
   useEffect(() => {
-    invoke<string[]>("clipboard_history").then((list) =>
-      setClips(list.map((text, i) => ({
-        id: "clip:" + i,
-        type: "clipboard" as const,
-        title: text.replace(/\s+/g, " ").slice(0, 80),
-        run: async () => { getCurrentWindow().hide(); await invoke("paste_text", { text }); },
-      })))
-    );
-  }, []);
-
-  useEffect(() => {
     invoke<{ name: string; path: string }[]>("list_apps").then((list) =>
       setApps(list.map((a) => ({
         id: "app:" + a.path,
@@ -53,34 +53,42 @@ export default function App() {
     );
   }, []);
 
+  // ponytail: mdfind pahalı (her tuşta process spawn) → debounce + root modda kısıtla
   useEffect(() => {
-    if (query.trim().length < 2) { setFiles([]); return; }
+    if (mode !== "root" || query.trim().length < 2) { setFiles([]); return; }
     let cancelled = false;
-    invoke<{ name: string; path: string }[]>("search_files", { query }).then((list) => {
-      if (cancelled) return;
-      setFiles(list.map((f) => ({
-        id: "file:" + f.path,
-        type: "file" as const,
-        title: f.name,
-        subtitle: f.path,
-        run: async () => { await invoke("open_path", { path: f.path }); getCurrentWindow().hide(); },
-      })));
-    });
-    return () => { cancelled = true; };
-  }, [query]);
+    const t = setTimeout(() => {
+      invoke<{ name: string; path: string }[]>("search_files", { query }).then((list) => {
+        if (cancelled) return;
+        setFiles(list.map((f) => ({
+          id: "file:" + f.path,
+          type: "file" as const,
+          title: f.name,
+          subtitle: f.path,
+          run: async () => { await invoke("open_path", { path: f.path }); getCurrentWindow().hide(); },
+        })));
+      });
+    }, 200);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query, mode]);
 
   const results = useMemo(() => {
+    if (mode === "clipboard") {
+      return query.trim() ? fuzzyFilter(query, clips, (r) => r.title) : clips;
+    }
     const base = [...fuzzyFilter(query, apps, (r) => r.title), ...files];
-    const c = query.trim() ? fuzzyFilter(query, clips, (r) => r.title) : [];
     const sn = query.trim() ? fuzzyFilter(query, snips, (r) => r.title) : [];
-    return [...base, ...sn, ...c];
-  }, [query, apps, files, clips, snips]);
+    return [...base, ...sn];
+  }, [mode, query, apps, files, clips, snips]);
 
   useEffect(() => setSelected(0), [query]);
 
   useEffect(() => {
-    const un = listen("focus-search", () => { setQuery(""); setManaging(false); });
-    return () => { un.then((f) => f()); };
+    const uns = [
+      listen("focus-search", () => { setQuery(""); setManaging(false); setMode("root"); }),
+      listen("clipboard-mode", () => { setQuery(""); setManaging(false); setMode("clipboard"); loadClips(); }),
+    ];
+    return () => { uns.forEach((u) => u.then((f) => f())); };
   }, []);
 
   useEffect(() => {
@@ -100,6 +108,7 @@ export default function App() {
     <div className="app">
       <SearchBar
         value={query}
+        placeholder={mode === "clipboard" ? "Pano geçmişinde ara..." : "Ara..."}
         onChange={(v) => {
           if (v.trim() === ">snippets") { setManaging(true); setQuery(""); }
           else setQuery(v);

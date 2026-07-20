@@ -61,13 +61,17 @@ fn save_snippets(app: tauri::AppHandle, items: Vec<snippets::Snippet>) -> Result
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let cmd_space = Shortcut::new(Some(Modifiers::SUPER), Code::Space);
+    let cmd_shift_v = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyV);
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, shortcut, event| {
-                    if shortcut == &cmd_space && event.state() == ShortcutState::Pressed {
-                        let w = app.get_webview_window("main").unwrap();
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    let w = app.get_webview_window("main").unwrap();
+                    if shortcut == &cmd_space {
                         if w.is_visible().unwrap_or(false) {
                             let _ = w.hide();
                         } else {
@@ -76,12 +80,18 @@ pub fn run() {
                             let _ = w.set_focus();
                             let _ = w.emit("focus-search", ());
                         }
+                    } else if shortcut == &cmd_shift_v {
+                        let _ = w.center();
+                        let _ = w.show();
+                        let _ = w.set_focus();
+                        let _ = w.emit("clipboard-mode", ());
                     }
                 })
                 .build(),
         )
         .setup(move |app| {
             app.global_shortcut().register(cmd_space)?;
+            app.global_shortcut().register(cmd_shift_v)?;
             let w = app.get_webview_window("main").unwrap();
             let w2 = w.clone();
             w.on_window_event(move |e| {
