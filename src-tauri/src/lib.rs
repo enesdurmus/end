@@ -1,6 +1,7 @@
 mod apps;
 mod clipboard;
 mod files;
+mod snippets;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -43,6 +44,18 @@ fn open_path(path: String) -> Result<(), String> {
 #[tauri::command]
 fn search_files(query: String) -> Vec<apps::AppEntry> {
     files::search(&query)
+}
+
+#[tauri::command]
+fn list_snippets(app: tauri::AppHandle) -> Vec<snippets::Snippet> {
+    let dir = app.path().app_config_dir().unwrap();
+    snippets::load(&dir)
+}
+
+#[tauri::command]
+fn save_snippets(app: tauri::AppHandle, items: Vec<snippets::Snippet>) -> Result<(), String> {
+    let dir = app.path().app_config_dir().unwrap();
+    snippets::save(&dir, &items)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -107,7 +120,9 @@ pub fn run() {
             open_path,
             search_files,
             clipboard_history,
-            paste_text
+            paste_text,
+            list_snippets,
+            save_snippets
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
