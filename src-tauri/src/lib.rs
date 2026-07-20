@@ -1,4 +1,5 @@
 mod apps;
+mod files;
 
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
@@ -12,6 +13,11 @@ fn list_apps() -> Vec<apps::AppEntry> {
 fn open_path(path: String) -> Result<(), String> {
     std::process::Command::new("open").arg(&path).spawn().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+fn search_files(query: String) -> Vec<apps::AppEntry> {
+    files::search(&query)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -46,7 +52,7 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![list_apps, open_path])
+        .invoke_handler(tauri::generate_handler![list_apps, open_path, search_files])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

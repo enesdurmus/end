@@ -11,6 +11,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const [apps, setApps] = useState<Result[]>([]);
+  const [files, setFiles] = useState<Result[]>([]);
 
   useEffect(() => {
     invoke<{ name: string; path: string }[]>("list_apps").then((list) =>
@@ -24,7 +25,26 @@ export default function App() {
     );
   }, []);
 
-  const results = useMemo(() => fuzzyFilter(query, apps, (r) => r.title), [query, apps]);
+  useEffect(() => {
+    if (query.trim().length < 2) { setFiles([]); return; }
+    let cancelled = false;
+    invoke<{ name: string; path: string }[]>("search_files", { query }).then((list) => {
+      if (cancelled) return;
+      setFiles(list.map((f) => ({
+        id: "file:" + f.path,
+        type: "file" as const,
+        title: f.name,
+        subtitle: f.path,
+        run: async () => { await invoke("open_path", { path: f.path }); getCurrentWindow().hide(); },
+      })));
+    });
+    return () => { cancelled = true; };
+  }, [query]);
+
+  const results = useMemo(
+    () => [...fuzzyFilter(query, apps, (r) => r.title), ...files],
+    [query, apps, files]
+  );
 
   useEffect(() => setSelected(0), [query]);
 
