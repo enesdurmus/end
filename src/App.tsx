@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import { SearchBar } from "./components/SearchBar";
 import { ResultList } from "./components/ResultList";
 import { SnippetManager } from "./components/SnippetManager";
@@ -76,6 +77,11 @@ export default function App() {
   }, [query, apps, files, clips, snips]);
 
   useEffect(() => setSelected(0), [query]);
+
+  useEffect(() => {
+    const un = listen("focus-search", () => { setQuery(""); setManaging(false); });
+    return () => { un.then((f) => f()); };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

@@ -5,7 +5,7 @@ mod snippets;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 struct ClipState {
@@ -74,6 +74,7 @@ pub fn run() {
                             let _ = w.center();
                             let _ = w.show();
                             let _ = w.set_focus();
+                            let _ = w.emit("focus-search", ());
                         }
                     }
                 })
