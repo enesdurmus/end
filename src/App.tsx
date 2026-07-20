@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SearchBar } from "./components/SearchBar";
 import { ResultList } from "./components/ResultList";
@@ -6,16 +7,24 @@ import { fuzzyFilter } from "./lib/fuzzy";
 import { Result } from "./types";
 import "./App.css";
 
-const DUMMY: Result[] = [
-  { id: "1", type: "app", title: "Safari", run: () => {} },
-  { id: "2", type: "app", title: "Terminal", run: () => {} },
-  { id: "3", type: "app", title: "iTerm", run: () => {} },
-];
-
 export default function App() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
-  const results = useMemo(() => fuzzyFilter(query, DUMMY, (r) => r.title), [query]);
+  const [apps, setApps] = useState<Result[]>([]);
+
+  useEffect(() => {
+    invoke<{ name: string; path: string }[]>("list_apps").then((list) =>
+      setApps(list.map((a) => ({
+        id: "app:" + a.path,
+        type: "app" as const,
+        title: a.name,
+        subtitle: a.path,
+        run: async () => { await invoke("open_path", { path: a.path }); getCurrentWindow().hide(); },
+      })))
+    );
+  }, []);
+
+  const results = useMemo(() => fuzzyFilter(query, apps, (r) => r.title), [query, apps]);
 
   useEffect(() => setSelected(0), [query]);
 
