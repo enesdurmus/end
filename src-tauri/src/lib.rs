@@ -41,12 +41,18 @@ fn paste_text(text: String, state: tauri::State<ClipState>) -> Result<(), String
     cb.set_text(text).map_err(|e| e.to_string())?;
     // reactivate the app that was frontmost before us, then Cmd+V into it
     let prev = state.prev_app.lock().unwrap().take();
+    // ponytail: activation is async on macOS, so poll until the target is actually
+    // frontmost (bounded) instead of gambling on a fixed delay, then Cmd+V.
     let script = match prev {
         Some(id) => format!(
-            "tell application id \"{}\" to activate\ndelay 0.1\ntell application \"System Events\" to keystroke \"v\" using command down",
-            id
+            "tell application id \"{id}\" to activate\n\
+             repeat 25 times\n\
+               tell application \"System Events\" to if bundle identifier of first application process whose frontmost is true is \"{id}\" then exit repeat\n\
+               delay 0.02\n\
+             end repeat\n\
+             tell application \"System Events\" to keystroke \"v\" using command down",
         ),
-        None => "delay 0.1\ntell application \"System Events\" to keystroke \"v\" using command down".to_string(),
+        None => "delay 0.15\ntell application \"System Events\" to keystroke \"v\" using command down".to_string(),
     };
     std::process::Command::new("osascript")
         .args(["-e", &script])
