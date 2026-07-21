@@ -6,8 +6,8 @@ pub fn search(query: &str) -> Vec<AppEntry> {
     if query.trim().is_empty() {
         return Vec::new();
     }
-    // ponytail: mdfind sık kelimede on binlerce satır döndürebilir; tümünü
-    // beklemek yerine stdout'u stream'leyip ilk 20'de kes → child SIGPIPE ile ölür.
+    // ponytail: mdfind can return tens of thousands of lines for common words;
+    // stream stdout and stop at the first 20 → child dies via SIGPIPE.
     let mut child = match Command::new("mdfind")
         .arg("-name")
         .arg(query)

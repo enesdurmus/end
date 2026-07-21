@@ -53,12 +53,15 @@ export default function App() {
     );
   }, []);
 
-  // ponytail: mdfind pahalı (her tuşta process spawn) → debounce + root modda kısıtla
+  // file search only when query starts with ">f", e.g. ">f report.pdf"
+  const fileQuery = /^>f\s+(.+)/.exec(query)?.[1]?.trim() ?? "";
+
+  // ponytail: mdfind is expensive (spawns a process per keystroke) → debounce + limit
   useEffect(() => {
-    if (mode !== "root" || query.trim().length < 2) { setFiles([]); return; }
+    if (mode !== "root" || fileQuery.length < 2) { setFiles([]); return; }
     let cancelled = false;
     const t = setTimeout(() => {
-      invoke<{ name: string; path: string }[]>("search_files", { query }).then((list) => {
+      invoke<{ name: string; path: string }[]>("search_files", { query: fileQuery }).then((list) => {
         if (cancelled) return;
         setFiles(list.map((f) => ({
           id: "file:" + f.path,
@@ -70,16 +73,17 @@ export default function App() {
       });
     }, 200);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [query, mode]);
+  }, [fileQuery, mode]);
 
   const results = useMemo(() => {
     if (mode === "clipboard") {
       return query.trim() ? fuzzyFilter(query, clips, (r) => r.title) : clips;
     }
-    const base = [...fuzzyFilter(query, apps, (r) => r.title), ...files];
+    if (fileQuery || query.startsWith(">f")) return files;
+    const base = fuzzyFilter(query, apps, (r) => r.title);
     const sn = query.trim() ? fuzzyFilter(query, snips, (r) => r.title) : [];
     return [...base, ...sn];
-  }, [mode, query, apps, files, clips, snips]);
+  }, [mode, query, fileQuery, apps, files, clips, snips]);
 
   useEffect(() => setSelected(0), [query]);
 
@@ -108,7 +112,7 @@ export default function App() {
     <div className="app">
       <SearchBar
         value={query}
-        placeholder={mode === "clipboard" ? "Pano geçmişinde ara..." : "Ara..."}
+        placeholder={mode === "clipboard" ? "Search clipboard history..." : "Search..."}
         onChange={(v) => {
           if (v.trim() === ">snippets") { setManaging(true); setQuery(""); }
           else setQuery(v);

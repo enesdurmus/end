@@ -1,4 +1,4 @@
-// ponytail: basit subsequence skorlayıcı; yetmezse fuse.js
+// ponytail: simple subsequence scorer; reach for fuse.js if this isn't enough
 export function fuzzyScore(query: string, target: string): number {
   const q = query.trim().toLowerCase();
   const t = target.toLowerCase();

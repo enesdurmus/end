@@ -11,6 +11,18 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 struct ClipState {
     list: Mutex<Vec<String>>,
     dir: PathBuf,
+    // bundle id of the app that was frontmost before we stole focus
+    prev_app: Mutex<Option<String>>,
+}
+
+// ponytail: osascript is the cheapest way to read/set frontmost app on macOS
+fn frontmost_bundle_id() -> Option<String> {
+    let out = std::process::Command::new("osascript")
+        .args(["-e", "tell application \"System Events\" to get bundle identifier of first application process whose frontmost is true"])
+        .output()
+        .ok()?;
+    let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if id.is_empty() { None } else { Some(id) }
 }
 
 #[tauri::command]
@@ -24,12 +36,20 @@ fn clipboard_history(state: tauri::State<ClipState>) -> Vec<String> {
 }
 
 #[tauri::command]
-fn paste_text(text: String) -> Result<(), String> {
+fn paste_text(text: String, state: tauri::State<ClipState>) -> Result<(), String> {
     let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     cb.set_text(text).map_err(|e| e.to_string())?;
-    // pano set edildikten sonra öndeki uygulamaya Cmd+V bas
+    // reactivate the app that was frontmost before us, then Cmd+V into it
+    let prev = state.prev_app.lock().unwrap().take();
+    let script = match prev {
+        Some(id) => format!(
+            "tell application id \"{}\" to activate\ndelay 0.1\ntell application \"System Events\" to keystroke \"v\" using command down",
+            id
+        ),
+        None => "delay 0.1\ntell application \"System Events\" to keystroke \"v\" using command down".to_string(),
+    };
     std::process::Command::new("osascript")
-        .args(["-e", "tell application \"System Events\" to keystroke \"v\" using command down"])
+        .args(["-e", &script])
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -81,6 +101,9 @@ pub fn run() {
                             let _ = w.emit("focus-search", ());
                         }
                     } else if shortcut == &cmd_shift_v {
+                        // remember who was frontmost before we take focus
+                        let prev = frontmost_bundle_id();
+                        *app.state::<ClipState>().prev_app.lock().unwrap() = prev;
                         let _ = w.center();
                         let _ = w.show();
                         let _ = w.set_focus();
@@ -102,7 +125,7 @@ pub fn run() {
 
             let dir = app.path().app_config_dir().unwrap();
             let initial = clipboard::load(&dir);
-            app.manage(ClipState { list: Mutex::new(initial), dir: dir.clone() });
+            app.manage(ClipState { list: Mutex::new(initial), dir: dir.clone(), prev_app: Mutex::new(None) });
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let mut cb = match arboard::Clipboard::new() {
