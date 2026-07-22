@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Window } from "./ui/Window";
+import { Button } from "./ui/Button";
+import { Input } from "./ui/Input";
 
 type Snippet = { keyword: string; text: string };
 
@@ -8,21 +11,23 @@ export function SnippetManager({ onClose }: { onClose: () => void }) {
   useEffect(() => { invoke<Snippet[]>("list_snippets").then(setItems); }, []);
   const persist = (next: Snippet[]) => { setItems(next); invoke("save_snippets", { items: next }); };
   return (
-    <div className="app panel">
-      <h3>Snippets</h3>
+    <Window variant="flat" className="p-5">
+      <h3 className="m-0 mb-4 text-[15px] font-semibold">Snippets</h3>
       {items.map((s, i) => (
-        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input className="input" value={s.keyword} placeholder="keyword"
+        <div key={i} className="flex gap-2 mb-2">
+          <Input value={s.keyword} placeholder="keyword"
             onChange={(e) => { const n = [...items]; n[i] = { ...s, keyword: e.target.value }; setItems(n); }}
             onBlur={() => persist(items)} />
-          <input className="input" value={s.text} placeholder="text" style={{ flex: 1 }}
+          <Input value={s.text} placeholder="text" className="flex-1"
             onChange={(e) => { const n = [...items]; n[i] = { ...s, text: e.target.value }; setItems(n); }}
             onBlur={() => persist(items)} />
-          <button className="btn" onClick={() => persist(items.filter((_, j) => j !== i))}>delete</button>
+          <Button onClick={() => persist(items.filter((_, j) => j !== i))}>delete</Button>
         </div>
       ))}
-      <button className="btn" onClick={() => persist([...items, { keyword: "", text: "" }])}>+ add</button>
-      <button className="btn" onClick={onClose} style={{ marginLeft: 8 }}>close (Esc)</button>
-    </div>
+      <div className="flex gap-2">
+        <Button onClick={() => persist([...items, { keyword: "", text: "" }])}>+ add</Button>
+        <Button onClick={onClose}>close (Esc)</Button>
+      </div>
+    </Window>
   );
 }
