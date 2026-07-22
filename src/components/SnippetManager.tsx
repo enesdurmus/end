@@ -8,21 +8,21 @@ export function SnippetManager({ onClose }: { onClose: () => void }) {
   useEffect(() => { invoke<Snippet[]>("list_snippets").then(setItems); }, []);
   const persist = (next: Snippet[]) => { setItems(next); invoke("save_snippets", { items: next }); };
   return (
-    <div className="app" style={{ padding: 16 }}>
+    <div className="app panel">
       <h3>Snippets</h3>
       {items.map((s, i) => (
-        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-          <input value={s.keyword} placeholder="keyword"
+        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <input className="input" value={s.keyword} placeholder="keyword"
             onChange={(e) => { const n = [...items]; n[i] = { ...s, keyword: e.target.value }; setItems(n); }}
             onBlur={() => persist(items)} />
-          <input value={s.text} placeholder="metin" style={{ flex: 1 }}
+          <input className="input" value={s.text} placeholder="text" style={{ flex: 1 }}
             onChange={(e) => { const n = [...items]; n[i] = { ...s, text: e.target.value }; setItems(n); }}
             onBlur={() => persist(items)} />
-          <button onClick={() => persist(items.filter((_, j) => j !== i))}>sil</button>
+          <button className="btn" onClick={() => persist(items.filter((_, j) => j !== i))}>delete</button>
         </div>
       ))}
-      <button onClick={() => persist([...items, { keyword: "", text: "" }])}>+ ekle</button>
-      <button onClick={onClose} style={{ marginLeft: 8 }}>kapat (Esc)</button>
+      <button className="btn" onClick={() => persist([...items, { keyword: "", text: "" }])}>+ add</button>
+      <button className="btn" onClick={onClose} style={{ marginLeft: 8 }}>close (Esc)</button>
     </div>
   );
 }
