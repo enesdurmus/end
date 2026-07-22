@@ -32,6 +32,7 @@
         "center": true,
         "visible": false,
         "resizable": false,
+        "transparent": true,
         "theme": "Dark"
       }
     ],
