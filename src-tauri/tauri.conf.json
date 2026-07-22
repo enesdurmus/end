@@ -23,6 +23,15 @@
         "visible": false,
         "skipTaskbar": true,
         "resizable": false
+      },
+      {
+        "label": "preferences",
+        "title": "Preferences",
+        "width": 420,
+        "height": 380,
+        "center": true,
+        "visible": false,
+        "resizable": false
       }
     ],
     "security": {
