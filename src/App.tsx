@@ -7,7 +7,6 @@ import { ResultList } from "./components/ResultList";
 import { SnippetManager } from "./components/SnippetManager";
 import { fuzzyFilter } from "./lib/fuzzy";
 import { Result } from "./types";
-import "./App.css";
 
 export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);

@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: rgba(28, 28, 30, 0.72);
+  --color-fg: #eaeaea;
+  --color-fg-dim: #8a8a8f;
+  --color-sel: rgba(255, 255, 255, 0.09);
+  --color-hair: rgba(255, 255, 255, 0.08);
+  --color-accent: #64a0ff;
+  --color-success: #40c057;
+  --color-danger: #e03131;
+  --radius-window: 14px;
+}
+
+html, body, #root { margin: 0; height: 100%; background: transparent; }
+* { box-sizing: border-box; }
+
+/* backdrop-filter: Tailwind utility'siyle temiz ifade edilemez (saturate + blur birlikte) */
+@utility backdrop-blur-window {
+  -webkit-backdrop-filter: saturate(180%) blur(30px);
+  backdrop-filter: saturate(180%) blur(30px);
+}
+
+/* ince scrollbar (::-webkit-scrollbar utility'lenemiyor) */
+.scroll-thin::-webkit-scrollbar { width: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
