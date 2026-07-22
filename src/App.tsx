@@ -1,12 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { SearchBar } from "./components/SearchBar";
 import { ResultList } from "./components/ResultList";
 import { SnippetManager } from "./components/SnippetManager";
+import { Window } from "./components/ui/Window";
 import { fuzzyFilter } from "./lib/fuzzy";
 import { Result } from "./types";
+
+function Kbd({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-block min-w-[18px] text-center px-[5px] py-px ml-1.5 bg-white/10 rounded text-[11px] text-fg">
+      {children}
+    </span>
+  );
+}
 
 export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -134,7 +143,7 @@ export default function App() {
   if (managing) return <SnippetManager onClose={() => setManaging(false)} />;
 
   return (
-    <div className="app">
+    <Window variant="floating">
       <SearchBar
         inputRef={inputRef}
         value={query}
@@ -143,26 +152,30 @@ export default function App() {
         onChange={setQuery}
       />
       {mode === "clipboard" ? (
-        <div className="split">
-          <ResultList results={results} selected={selected} />
-          <div className="preview">
+        <div className="flex flex-1 min-h-0">
+          <div className="flex-none w-[42%] border-r border-hair flex flex-col min-h-0">
+            <ResultList results={results} selected={selected} />
+          </div>
+          <div className="scroll-thin flex-1 min-w-0 px-[18px] py-4 overflow-y-auto">
             {results[selected]?.body ? (
-              <pre className="preview-text">{results[selected].body!.slice(0, 5000)}</pre>
+              <pre className="m-0 font-mono text-[13px] leading-[1.5] text-fg whitespace-pre-wrap break-words">
+                {results[selected].body!.slice(0, 5000)}
+              </pre>
             ) : (
-              <div className="preview-empty">No selection</div>
+              <div className="text-fg-dim text-[13px] grid place-items-center h-full">No selection</div>
             )}
           </div>
         </div>
       ) : (
         <ResultList results={results} selected={selected} />
       )}
-      <div className="footer">
+      <div className="flex-none flex items-center justify-between px-3.5 py-2 border-t border-hair text-xs text-fg-dim">
         <span>{results.length} results</span>
-        <span className="actions">
-          <span>Open<span className="kbd">↵</span></span>
-          <span>Close<span className="kbd">esc</span></span>
+        <span className="flex items-center gap-3">
+          <span>Open<Kbd>↵</Kbd></span>
+          <span>Close<Kbd>esc</Kbd></span>
         </span>
       </div>
-    </div>
+    </Window>
   );
 }
