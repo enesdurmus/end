@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { Window } from "./ui/Window";
+import { Button } from "./ui/Button";
+import { Field } from "./ui/Field";
 
 type Prefs = { toggle_shortcut: string; clipboard_shortcut: string };
 type Kind = "toggle" | "clipboard";
@@ -39,13 +42,12 @@ function HotkeyRow({ label, kind, value, onChanged }: { label: string; kind: Kin
   }, [recording, kind, onChanged]);
 
   return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 13, marginBottom: 4 }}>{label}</div>
-      <button className="btn" onClick={() => { setRecording(true); setError(""); }} style={{ minWidth: 180 }}>
+    <Field label={label}>
+      <Button className="min-w-[180px]" onClick={() => { setRecording(true); setError(""); }}>
         {recording ? "Waiting for keys…" : value.replace(/\+/g, " + ")}
-      </button>
-      {error && <div style={{ color: "#e03131", fontSize: 12, marginTop: 4 }}>{error}</div>}
-    </div>
+      </Button>
+      {error && <div className="text-danger text-xs mt-1">{error}</div>}
+    </Field>
   );
 }
 
@@ -63,28 +65,28 @@ export function Preferences() {
   if (!prefs) return null;
 
   return (
-    <div className="app panel" style={{ borderRadius: 0 }}>
-      <h3>Preferences</h3>
+    <Window variant="flat" className="p-5">
+      <h3 className="m-0 mb-4 text-[15px] font-semibold">Preferences</h3>
 
       <HotkeyRow label="Toggle Launcher" kind="toggle" value={prefs.toggle_shortcut}
         onChanged={(accel) => setPrefs({ ...prefs, toggle_shortcut: accel })} />
       <HotkeyRow label="Clipboard History" kind="clipboard" value={prefs.clipboard_shortcut}
         onChanged={(accel) => setPrefs({ ...prefs, clipboard_shortcut: accel })} />
 
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--hair)" }}>
-        <div style={{ fontSize: 13, marginBottom: 8 }}>
+      <div className="mt-5 pt-4 border-t border-hair">
+        <div className="text-[13px] mb-2">
           Accessibility permission:{" "}
-          <span style={{ color: accessible ? "#40c057" : "#e03131" }}>
+          <span className={accessible ? "text-success" : "text-danger"}>
             {accessible === null ? "checking…" : accessible ? "Granted" : "Not granted"}
           </span>
         </div>
-        <button className="btn" onClick={recheck}>Re-check</button>
-        {!accessible && (
-          <button className="btn" style={{ marginLeft: 8 }} onClick={() => invoke("open_accessibility_settings")}>
-            Open System Settings
-          </button>
-        )}
+        <div className="flex gap-2">
+          <Button onClick={recheck}>Re-check</Button>
+          {!accessible && (
+            <Button onClick={() => invoke("open_accessibility_settings")}>Open System Settings</Button>
+          )}
+        </div>
       </div>
-    </div>
+    </Window>
   );
 }
