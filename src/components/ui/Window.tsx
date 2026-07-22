@@ -14,7 +14,7 @@ export function Window({
       className={
         "flex flex-col h-screen overflow-hidden text-fg bg-bg backdrop-blur-window " +
         "border border-hair font-[-apple-system,BlinkMacSystemFont,'SF_Pro_Text',sans-serif] " +
-        (variant === "floating" ? "rounded-[14px] " : "") +
+        (variant === "floating" ? "rounded-window " : "") +
         className
       }
     >
