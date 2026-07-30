@@ -1,0 +1,58 @@
+//! Global-shortcut registration and the key-press handler.
+
+use std::error::Error;
+use std::str::FromStr;
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
+
+use crate::platform::{host, Platform};
+use crate::preferences;
+use crate::state::{ClipState, ShortcutsState};
+
+/// Register the persisted shortcuts and return the state to be `manage`d.
+pub fn register<R: Runtime>(
+    app: &AppHandle<R>,
+    dir: std::path::PathBuf,
+) -> Result<ShortcutsState, Box<dyn Error>> {
+    let prefs = preferences::load(&dir);
+    let toggle = Shortcut::from_str(&prefs.toggle_shortcut)?;
+    let clipboard = Shortcut::from_str(&prefs.clipboard_shortcut)?;
+    app.global_shortcut().register(toggle)?;
+    app.global_shortcut().register(clipboard)?;
+    Ok(ShortcutsState {
+        toggle: Mutex::new(toggle),
+        clipboard: Mutex::new(clipboard),
+        dir,
+    })
+}
+
+/// Handle a shortcut press: toggle the launcher, or open it in clipboard mode.
+pub fn on_press<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, event: ShortcutEvent) {
+    if event.state() != ShortcutState::Pressed {
+        return;
+    }
+    let state = app.state::<ShortcutsState>();
+    let is_toggle = *shortcut == *state.toggle.lock().unwrap();
+    let is_clipboard = *shortcut == *state.clipboard.lock().unwrap();
+    let w = app.get_webview_window("main").unwrap();
+
+    if is_toggle {
+        if w.is_visible().unwrap_or(false) {
+            let _ = w.hide();
+        } else {
+            let _ = w.center();
+            let _ = w.show();
+            let _ = w.set_focus();
+            let _ = w.emit("focus-search", ());
+        }
+    } else if is_clipboard {
+        // remember who was frontmost before we take focus
+        let prev = host().frontmost_app();
+        *app.state::<ClipState>().prev_app.lock().unwrap() = prev;
+        let _ = w.center();
+        let _ = w.show();
+        let _ = w.set_focus();
+        let _ = w.emit("clipboard-mode", ());
+    }
+}

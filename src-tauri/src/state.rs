@@ -1,0 +1,19 @@
+use std::path::PathBuf;
+use std::sync::Mutex;
+use tauri_plugin_global_shortcut::Shortcut;
+
+/// Clipboard history plus the focus we need to restore after a paste.
+pub struct ClipState {
+    pub list: Mutex<Vec<String>>,
+    pub dir: PathBuf,
+    // bundle id of the app that was frontmost before we stole focus
+    pub prev_app: Mutex<Option<String>>,
+}
+
+/// Live shortcuts + the config dir, shared between the press handler and the
+/// `set_shortcut` command so both read/write one source of truth.
+pub struct ShortcutsState {
+    pub toggle: Mutex<Shortcut>,
+    pub clipboard: Mutex<Shortcut>,
+    pub dir: PathBuf,
+}
