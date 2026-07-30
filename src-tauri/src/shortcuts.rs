@@ -41,6 +41,7 @@ pub fn on_press<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, event: Shor
         if w.is_visible().unwrap_or(false) {
             let _ = w.hide();
         } else {
+            *app.state::<ClipState>().prev_app.lock().unwrap() = None;
             let _ = w.center();
             let _ = w.show();
             let _ = w.set_focus();
