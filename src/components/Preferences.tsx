@@ -3,8 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { Window } from "./ui/Window";
 import { Button } from "./ui/Button";
 import { Field } from "./ui/Field";
+import { Input } from "./ui/Input";
 
-type Prefs = { toggle_shortcut: string; clipboard_shortcut: string };
+type Prefs = { toggle_shortcut: string; clipboard_shortcut: string; history_limit: number };
 type Kind = "toggle" | "clipboard";
 
 const MODIFIER_CODES = new Set(["MetaLeft", "MetaRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight"]);
@@ -51,6 +52,35 @@ function HotkeyRow({ label, kind, value, onChanged }: { label: string; kind: Kin
   );
 }
 
+// backend clamps to this range too; mirror it so the UI shows the persisted value
+const clampLimit = (n: number) => Math.min(Math.max(Math.trunc(n), 1), 10000);
+
+function HistoryLimitRow({ value, onChanged }: { value: number; onChanged: (n: number) => void }) {
+  const [text, setText] = useState(String(value));
+  const [error, setError] = useState("");
+
+  const commit = () => {
+    const n = Number(text);
+    if (!Number.isFinite(n) || n < 1) { setError("Must be a number ≥ 1"); return; }
+    const limit = clampLimit(n);
+    invoke("set_history_limit", { limit })
+      .then(() => { setError(""); setText(String(limit)); onChanged(limit); })
+      .catch((err) => setError(String(err)));
+  };
+
+  return (
+    <Field label="Clipboard History Limit">
+      <Input
+        type="number" min={1} max={10000} className="w-24" value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      />
+      {error && <div className="text-danger text-xs mt-1">{error}</div>}
+    </Field>
+  );
+}
+
 export function Preferences() {
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [accessible, setAccessible] = useState<boolean | null>(null);
@@ -72,6 +102,9 @@ export function Preferences() {
         onChanged={(accel) => setPrefs({ ...prefs, toggle_shortcut: accel })} />
       <HotkeyRow label="Clipboard History" kind="clipboard" value={prefs.clipboard_shortcut}
         onChanged={(accel) => setPrefs({ ...prefs, clipboard_shortcut: accel })} />
+
+      <HistoryLimitRow value={prefs.history_limit}
+        onChanged={(n) => setPrefs({ ...prefs, history_limit: n })} />
 
       <div className="mt-5 pt-4 border-t border-hair">
         <div className="text-[13px] mb-2">

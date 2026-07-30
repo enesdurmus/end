@@ -1,10 +1,19 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+// standalone so serde can use it as a per-field default when migrating old files
+pub const DEFAULT_HISTORY_LIMIT: usize = 200;
+fn default_history_limit() -> usize {
+    DEFAULT_HISTORY_LIMIT
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Preferences {
     pub toggle_shortcut: String,
     pub clipboard_shortcut: String,
+    // #[serde(default)]: preferences.json written before this field existed still parses
+    #[serde(default = "default_history_limit")]
+    pub history_limit: usize,
 }
 
 impl Default for Preferences {
@@ -12,6 +21,7 @@ impl Default for Preferences {
         Preferences {
             toggle_shortcut: "Super+Space".into(),
             clipboard_shortcut: "Super+Shift+KeyV".into(),
+            history_limit: DEFAULT_HISTORY_LIMIT,
         }
     }
 }

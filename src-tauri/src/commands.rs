@@ -2,9 +2,11 @@
 //! platform method or a storage module — no business logic lives here.
 
 use std::str::FromStr;
+use std::sync::atomic::Ordering;
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
+use crate::clipboard;
 use crate::platform::{host, AppEntry, Platform};
 use crate::preferences;
 use crate::snippets;
@@ -82,6 +84,25 @@ pub fn set_shortcut(app: tauri::AppHandle, kind: String, accelerator: String) ->
     } else {
         prefs.clipboard_shortcut = accelerator;
     }
+    preferences::save(&state.dir, &prefs)
+}
+
+#[tauri::command]
+pub fn set_history_limit(
+    limit: usize,
+    state: tauri::State<ClipState>,
+) -> Result<(), String> {
+    let limit = limit.clamp(1, 10_000); // guard against 0 / absurd values
+    state.limit.store(limit, Ordering::Relaxed);
+    let mut list = state.list.lock().unwrap();
+    if list.len() > limit {
+        list.truncate(limit);
+    }
+    clipboard::save(&state.dir, &list);
+
+    // persist so the limit survives a restart
+    let mut prefs = preferences::load(&state.dir);
+    prefs.history_limit = limit;
     preferences::save(&state.dir, &prefs)
 }
 
