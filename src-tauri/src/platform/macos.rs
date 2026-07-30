@@ -17,7 +17,7 @@ impl Platform for MacOs {
         if let Some(home) = std::env::var_os("HOME") {
             scan(PathBuf::from(home).join("Applications"), &mut out);
         }
-        out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        out.sort_by_key(|a| a.name.to_lowercase());
         out
     }
 
@@ -132,7 +132,7 @@ fn scan(dir: PathBuf, out: &mut Vec<AppEntry>) {
     if let Ok(entries) = fs::read_dir(&dir) {
         for e in entries.flatten() {
             let p = e.path();
-            if p.extension().map_or(false, |x| x == "app") {
+            if p.extension().is_some_and(|x| x == "app") {
                 if let Some(name) = p.file_stem().and_then(|s| s.to_str()) {
                     out.push(AppEntry { name: name.to_string(), path: p.to_string_lossy().to_string() });
                 }
@@ -167,12 +167,12 @@ fn find_icns(app_path: &str) -> Option<PathBuf> {
         .ok()?
         .flatten()
         .map(|e| e.path())
-        .find(|p| p.extension().map_or(false, |x| x == "icns"))
+        .find(|p| p.extension().is_some_and(|x| x == "icns"))
 }
 
 fn b64(data: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut s = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut s = String::with_capacity(data.len().div_ceil(3) * 4);
     for c in data.chunks(3) {
         let b = [c[0], *c.get(1).unwrap_or(&0), *c.get(2).unwrap_or(&0)];
         let n = (b[0] as u32) << 16 | (b[1] as u32) << 8 | b[2] as u32;

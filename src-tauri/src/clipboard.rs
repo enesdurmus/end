@@ -1,9 +1,9 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub const CAP: usize = 500;
 
 pub fn push_capped(list: &mut Vec<String>, item: String, cap: usize) {
-    if list.first().map_or(false, |f| f == &item) {
+    if list.first() == Some(&item) {
         return; // same consecutive entry → ignore
     }
     list.retain(|x| x != &item); // drop existing duplicate, we'll move it to front
@@ -13,18 +13,18 @@ pub fn push_capped(list: &mut Vec<String>, item: String, cap: usize) {
     }
 }
 
-pub fn store_path(app_dir: &PathBuf) -> PathBuf {
+pub fn store_path(app_dir: &Path) -> PathBuf {
     app_dir.join("clipboard.json")
 }
 
-pub fn load(app_dir: &PathBuf) -> Vec<String> {
+pub fn load(app_dir: &Path) -> Vec<String> {
     let p = store_path(app_dir);
     std::fs::read_to_string(p).ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
 
-pub fn save(app_dir: &PathBuf, list: &[String]) {
+pub fn save(app_dir: &Path, list: &[String]) {
     let _ = std::fs::create_dir_all(app_dir);
     if let Ok(s) = serde_json::to_string(list) {
         let _ = std::fs::write(store_path(app_dir), s);
