@@ -9,6 +9,7 @@ mod tray;
 mod watcher;
 mod windows;
 
+use std::sync::atomic::AtomicUsize;
 use std::sync::Mutex;
 use tauri::Manager;
 
@@ -30,10 +31,12 @@ pub fn run() {
             windows::wire(handle);
 
             let initial = clipboard::load(&dir);
+            let limit = preferences::load(&dir).history_limit;
             app.manage(state::ClipState {
                 list: Mutex::new(initial),
                 dir: dir.clone(),
                 prev_app: Mutex::new(None),
+                limit: AtomicUsize::new(limit),
             });
             watcher::spawn(handle.clone());
             Ok(())
@@ -49,6 +52,7 @@ pub fn run() {
             commands::save_snippets,
             commands::get_preferences,
             commands::set_shortcut,
+            commands::set_history_limit,
             commands::check_accessibility,
             commands::open_accessibility_settings
         ])

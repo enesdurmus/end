@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-pub const CAP: usize = 500;
+// The cap is a runtime setting now (see preferences::history_limit), passed into push_capped.
 
 pub fn push_capped(list: &mut Vec<String>, item: String, cap: usize) {
     if list.first() == Some(&item) {
@@ -34,6 +34,7 @@ pub fn save(app_dir: &Path, list: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const CAP: usize = 500;
     #[test]
     fn cap_and_ordering() {
         let mut l = Vec::new();
