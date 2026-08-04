@@ -20,13 +20,13 @@ test("move on empty list stays at 0", () => {
 test("goMode enters a mode, clears query, exits managing", () => {
   const s: NavState = { mode: "root", query: "x", selected: 4, managing: true };
   expect(navReducer(s, { type: "goMode", mode: "clipboard" })).toMatchObject({
-    mode: "clipboard", query: "", managing: false,
+    mode: "clipboard", query: "", selected: 0, managing: false,
   });
 });
 
 test("goRoot resets to root", () => {
   const s: NavState = { mode: "files", query: "x", selected: 2, managing: false };
-  expect(navReducer(s, { type: "goRoot" })).toMatchObject({ mode: "root", query: "" });
+  expect(navReducer(s, { type: "goRoot" })).toMatchObject({ mode: "root", query: "", selected: 0 });
 });
 
 test("manage / closeManage toggle the snippet manager", () => {

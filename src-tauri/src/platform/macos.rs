@@ -80,14 +80,26 @@ impl Platform for MacOs {
         out
     }
 
-    // ponytail: osascript is the cheapest way to read the frontmost app on macOS
+    // ponytail: lsappinfo (~10ms, no Automation permission) instead of
+    // osascript+System Events (~400ms). Blocks the shortcut path, so it must stay fast.
     fn frontmost_app(&self) -> Option<String> {
-        let out = Command::new("osascript")
-            .args(["-e", "tell application \"System Events\" to get bundle identifier of first application process whose frontmost is true"])
+        let asn = Command::new("lsappinfo").arg("front").output().ok()?;
+        let asn = String::from_utf8_lossy(&asn.stdout).trim().to_string();
+        if asn.is_empty() {
+            return None;
+        }
+        let out = Command::new("lsappinfo")
+            .args(["info", "-only", "bundleid", &asn])
             .output()
             .ok()?;
-        let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if id.is_empty() { None } else { Some(id) }
+        // output looks like: "CFBundleIdentifier"="com.foo.bar"
+        let line = String::from_utf8_lossy(&out.stdout);
+        let id = line.rsplit('=').next()?.trim().trim_matches('"');
+        if id.is_empty() {
+            None
+        } else {
+            Some(id.to_string())
+        }
     }
 
     fn paste(&self, prev: Option<String>) {

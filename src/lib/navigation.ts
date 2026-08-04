@@ -29,9 +29,9 @@ export function navReducer(s: NavState, a: NavAction): NavState {
     case "move":
       return { ...s, selected: Math.max(0, Math.min(s.selected + a.delta, a.max - 1)) };
     case "goMode":
-      return { ...s, mode: a.mode, query: "", managing: false };
+      return { ...s, mode: a.mode, query: "", selected: 0, managing: false };
     case "goRoot":
-      return { ...s, mode: "root", query: "", managing: false };
+      return { ...s, mode: "root", query: "", selected: 0, managing: false };
     case "manage":
       return { ...s, managing: true, query: "" };
     case "closeManage":
