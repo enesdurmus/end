@@ -78,11 +78,14 @@ export default function App() {
   if (managing) return <SnippetManager onClose={() => dispatch({ type: "closeManage" })} />;
 
   const typing = mode === "translate" && !!query.trim();
+  // nav's `source` stays "auto" so the next request keeps auto-detecting;
+  // the status bar shows what the backend actually detected
+  const displaySource = typing && entry ? entry.from : source;
   const status: { left: string; hints: [string, string][] } = picking
     ? { left: "Target language", hints: [["Select", "↵"], ["Cancel", "esc"]] }
     : mode === "translate"
       ? {
-          left: `${languageName(source)} → ${languageName(target)}`,
+          left: `${languageName(displaySource)} → ${languageName(target)}`,
           hints: typing
             ? [["Copy", "↵"], ["Paste", "⌘↵"], ["Lang", "⌘P"], ["Swap", "⌘S"]]
             : [["Copy", "↵"], ["Paste", "⌘↵"], ["Lang", "⌘P"], ["Clear", "⌘⌫"]],
