@@ -3,12 +3,22 @@ import { Result } from "./types";
 import { NavAction } from "./lib/navigation";
 
 // Mode-switch commands, Raycast-style: fuzzy-searchable in root, Enter switches view.
-export function buildCommands(dispatch: Dispatch<NavAction>, loadClips: () => void): Result[] {
+export function buildCommands(
+  dispatch: Dispatch<NavAction>,
+  loadClips: () => void,
+  loadHistory: () => void
+): Result[] {
   return [
     {
       id: "cmd:clipboard", type: "command", title: "Clipboard History",
       subtitle: "Browse and paste clipboard history", aliases: ["clipboard", "clips"],
       run: () => { dispatch({ type: "goMode", mode: "clipboard" }); loadClips(); },
+    },
+    {
+      id: "cmd:translate", type: "command", title: "Translate",
+      subtitle: "Translate text without leaving the launcher",
+      aliases: ["translate", "tr", "çevir", "cevir"],
+      run: () => { dispatch({ type: "goMode", mode: "translate" }); loadHistory(); },
     },
     {
       id: "cmd:files", type: "command", title: "Search Files",
