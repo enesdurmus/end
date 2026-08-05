@@ -5,6 +5,7 @@ mod preferences;
 mod shortcuts;
 mod snippets;
 mod state;
+mod translate;
 mod tray;
 mod watcher;
 mod windows;
