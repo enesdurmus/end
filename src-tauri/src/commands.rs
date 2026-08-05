@@ -11,6 +11,7 @@ use crate::platform::{host, AppEntry, Platform};
 use crate::preferences;
 use crate::snippets;
 use crate::state::{ClipState, ShortcutsState};
+use crate::translate::{Provider, Translation};
 
 #[tauri::command]
 pub fn list_apps() -> Vec<AppEntry> {
@@ -104,6 +105,38 @@ pub fn set_history_limit(
     let mut prefs = preferences::load(&state.dir);
     prefs.history_limit = limit;
     preferences::save(&state.dir, &prefs)
+}
+
+#[tauri::command]
+pub async fn translate(
+    text: String,
+    from: Option<String>,
+    to: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<Translation, String> {
+    let prefs = preferences::load(&app.path().app_config_dir().unwrap());
+    let from = from.unwrap_or_else(|| "auto".into());
+    let to = to.unwrap_or(prefs.translate_target);
+    crate::translate::fetch(prefs.translate_provider, &text, &from, &to).await
+}
+
+// Both fields are optional: the language picker sets only the target, the
+// Preferences window sets only the engine, and neither clobbers the other.
+#[tauri::command]
+pub fn set_translate_prefs(
+    app: tauri::AppHandle,
+    target: Option<String>,
+    provider: Option<Provider>,
+) -> Result<(), String> {
+    let dir = app.path().app_config_dir().unwrap();
+    let mut prefs = preferences::load(&dir);
+    if let Some(t) = target {
+        prefs.translate_target = t;
+    }
+    if let Some(p) = provider {
+        prefs.translate_provider = p;
+    }
+    preferences::save(&dir, &prefs)
 }
 
 #[tauri::command]

@@ -55,7 +55,9 @@ pub fn run() {
             commands::set_shortcut,
             commands::set_history_limit,
             commands::check_accessibility,
-            commands::open_accessibility_settings
+            commands::open_accessibility_settings,
+            commands::translate,
+            commands::set_translate_prefs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
