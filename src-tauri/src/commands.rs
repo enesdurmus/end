@@ -10,7 +10,9 @@ use crate::clipboard;
 use crate::platform::{host, AppEntry, Platform};
 use crate::preferences;
 use crate::snippets;
-use crate::state::{ClipState, ShortcutsState};
+use crate::state::{ClipState, ShortcutsState, TranslateState};
+use crate::translate::{Provider, Translation};
+use crate::translate_history::{self, Entry};
 
 #[tauri::command]
 pub fn list_apps() -> Vec<AppEntry> {
@@ -26,10 +28,17 @@ pub fn clipboard_history(state: tauri::State<ClipState>) -> Vec<String> {
 pub fn paste_text(text: String, state: tauri::State<ClipState>) -> Result<(), String> {
     let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     cb.set_text(text).map_err(|e| e.to_string())?;
-    // reactivate the app that was frontmost before us, then paste into it
     let prev = state.prev_app.lock().unwrap().take();
     host().paste(prev);
     Ok(())
+}
+
+// Clipboard-only: no paste, no focus restoration. This is what Enter uses;
+// `paste_text` is the ⌘Enter variant that also pastes into the previous app.
+#[tauri::command]
+pub fn write_clipboard(text: String) -> Result<(), String> {
+    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    cb.set_text(text).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -100,10 +109,41 @@ pub fn set_history_limit(
     }
     clipboard::save(&state.dir, &list);
 
-    // persist so the limit survives a restart
     let mut prefs = preferences::load(&state.dir);
     prefs.history_limit = limit;
     preferences::save(&state.dir, &prefs)
+}
+
+#[tauri::command]
+pub async fn translate(
+    text: String,
+    from: Option<String>,
+    to: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<Translation, String> {
+    let prefs = preferences::load(&app.path().app_config_dir().unwrap());
+    let from = from.unwrap_or_else(|| "auto".into());
+    let to = to.unwrap_or(prefs.translate_target);
+    crate::translate::fetch(prefs.translate_provider, &text, &from, &to).await
+}
+
+// Both fields are optional: the language picker sets only the target, the
+// Preferences window sets only the engine, and neither clobbers the other.
+#[tauri::command]
+pub fn set_translate_prefs(
+    app: tauri::AppHandle,
+    target: Option<String>,
+    provider: Option<Provider>,
+) -> Result<(), String> {
+    let dir = app.path().app_config_dir().unwrap();
+    let mut prefs = preferences::load(&dir);
+    if let Some(t) = target {
+        prefs.translate_target = t;
+    }
+    if let Some(p) = provider {
+        prefs.translate_provider = p;
+    }
+    preferences::save(&dir, &prefs)
 }
 
 #[tauri::command]
@@ -114,4 +154,25 @@ pub fn check_accessibility() -> bool {
 #[tauri::command]
 pub fn open_accessibility_settings() -> Result<(), String> {
     host().open_accessibility_settings()
+}
+
+#[tauri::command]
+pub fn translate_history(state: tauri::State<TranslateState>) -> Vec<Entry> {
+    state.list.lock().unwrap().clone()
+}
+
+#[tauri::command]
+pub fn record_translation(entry: Entry, state: tauri::State<TranslateState>) -> Result<(), String> {
+    let mut list = state.list.lock().unwrap();
+    translate_history::push_capped(&mut list, entry, translate_history::HISTORY_LIMIT);
+    translate_history::save(&state.dir, &list);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn clear_translate_history(state: tauri::State<TranslateState>) -> Result<(), String> {
+    let mut list = state.list.lock().unwrap();
+    list.clear();
+    translate_history::save(&state.dir, &list);
+    Ok(())
 }

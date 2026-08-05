@@ -4,7 +4,6 @@ import { Result } from "../types";
 import { RunActions } from "../lib/actions";
 import { appToResult, RawApp } from "../lib/results";
 
-// Loads installed apps once, then patches real icons in lazily as each resolves.
 export function useApps(actions: RunActions): Result[] {
   const [apps, setApps] = useState<Result[]>([]);
 

@@ -4,8 +4,15 @@ import { Window } from "./ui/Window";
 import { Button } from "./ui/Button";
 import { Field } from "./ui/Field";
 import { Input } from "./ui/Input";
+import { LANGUAGES } from "../lib/languages";
 
-type Prefs = { toggle_shortcut: string; clipboard_shortcut: string; history_limit: number };
+type Prefs = {
+  toggle_shortcut: string;
+  clipboard_shortcut: string;
+  history_limit: number;
+  translate_target: string;
+  translate_provider: string;
+};
 type Kind = "toggle" | "clipboard";
 
 const MODIFIER_CODES = new Set(["MetaLeft", "MetaRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight"]);
@@ -81,6 +88,51 @@ function HistoryLimitRow({ value, onChanged }: { value: number; onChanged: (n: n
   );
 }
 
+// ponytail: plain <select>; a styled dropdown primitive isn't worth it for two rows
+const SELECT_CLASS =
+  "bg-white/10 border border-hair rounded-md px-2 py-1 text-[13px] text-fg outline-none";
+
+function TranslateRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Prefs>) => void }) {
+  const [error, setError] = useState("");
+
+  // send only what changed; the backend leaves the omitted field alone
+  const commit = (next: Partial<Prefs>) => {
+    invoke("set_translate_prefs", {
+      target: next.translate_target ?? null,
+      provider: next.translate_provider ?? null,
+    })
+      .then(() => { setError(""); onChanged(next); })
+      .catch((err) => setError(String(err)));
+  };
+
+  return (
+    <>
+      <Field label="Translate To">
+        <select
+          className={SELECT_CLASS}
+          value={prefs.translate_target}
+          onChange={(e) => commit({ translate_target: e.target.value })}
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>{l.name}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Translation Engine">
+        <select
+          className={SELECT_CLASS}
+          value={prefs.translate_provider}
+          onChange={(e) => commit({ translate_provider: e.target.value })}
+        >
+          {/* mirrors the Provider enum in src-tauri/src/translate.rs */}
+          <option value="google">Google</option>
+        </select>
+      </Field>
+      {error && <div className="text-danger text-xs mt-1">{error}</div>}
+    </>
+  );
+}
+
 export function Preferences() {
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [accessible, setAccessible] = useState<boolean | null>(null);
@@ -105,6 +157,8 @@ export function Preferences() {
 
       <HistoryLimitRow value={prefs.history_limit}
         onChanged={(n) => setPrefs({ ...prefs, history_limit: n })} />
+
+      <TranslateRows prefs={prefs} onChanged={(p) => setPrefs({ ...prefs, ...p })} />
 
       <div className="mt-5 pt-4 border-t border-hair">
         <div className="text-[13px] mb-2">

@@ -18,14 +18,14 @@ test("move on empty list stays at 0", () => {
 });
 
 test("goMode enters a mode, clears query, exits managing", () => {
-  const s: NavState = { mode: "root", query: "x", selected: 4, managing: true };
+  const s: NavState = { ...initialNav, mode: "root", query: "x", selected: 4, managing: true };
   expect(navReducer(s, { type: "goMode", mode: "clipboard" })).toMatchObject({
     mode: "clipboard", query: "", selected: 0, managing: false,
   });
 });
 
 test("goRoot resets to root", () => {
-  const s: NavState = { mode: "files", query: "x", selected: 2, managing: false };
+  const s: NavState = { ...initialNav, mode: "files", query: "x", selected: 2, managing: false };
   expect(navReducer(s, { type: "goRoot" })).toMatchObject({ mode: "root", query: "", selected: 0 });
 });
 
@@ -33,4 +33,63 @@ test("manage / closeManage toggle the snippet manager", () => {
   const opened = navReducer(initialNav, { type: "manage" });
   expect(opened).toMatchObject({ managing: true, query: "" });
   expect(navReducer(opened, { type: "closeManage" }).managing).toBe(false);
+});
+
+test("setLangs seeds the pair from persisted preferences", () => {
+  expect(navReducer(initialNav, { type: "setLangs", source: "auto", target: "de" })).toMatchObject({
+    source: "auto", target: "de",
+  });
+});
+
+test("pickLang stashes the typed text and clears the query", () => {
+  const s: NavState = { ...initialNav, mode: "translate", query: "merhaba", selected: 3 };
+  expect(navReducer(s, { type: "pickLang" })).toMatchObject({
+    picking: true, query: "", savedQuery: "merhaba", selected: 0,
+  });
+});
+
+test("setTarget applies the language and restores the typed text", () => {
+  const picking = navReducer(
+    { ...initialNav, mode: "translate", query: "merhaba" },
+    { type: "pickLang" }
+  );
+  expect(navReducer(picking, { type: "setTarget", code: "de" })).toMatchObject({
+    picking: false, target: "de", query: "merhaba", savedQuery: "", selected: 0,
+  });
+});
+
+test("cancelPick restores the typed text without changing the target", () => {
+  const picking = navReducer(
+    { ...initialNav, mode: "translate", query: "merhaba", target: "en" },
+    { type: "pickLang" }
+  );
+  expect(navReducer(picking, { type: "cancelPick" })).toMatchObject({
+    picking: false, target: "en", query: "merhaba",
+  });
+});
+
+test("swap resolves auto to the detected language", () => {
+  const s: NavState = { ...initialNav, mode: "translate", source: "auto", target: "en" };
+  expect(navReducer(s, { type: "swap", detected: "tr" })).toMatchObject({ source: "en", target: "tr" });
+});
+
+test("swap flips an explicit pair", () => {
+  const s: NavState = { ...initialNav, mode: "translate", source: "en", target: "tr" };
+  expect(navReducer(s, { type: "swap", detected: "en" })).toMatchObject({ source: "tr", target: "en" });
+});
+
+test("goRoot leaves the picker and keeps the language pair", () => {
+  const s: NavState = { ...initialNav, mode: "translate", picking: true, target: "de" };
+  expect(navReducer(s, { type: "goRoot" })).toMatchObject({ mode: "root", picking: false, target: "de" });
+});
+
+test("leaving a mode clears the picker's stashed query", () => {
+  const picking = navReducer(
+    { ...initialNav, mode: "translate", query: "merhaba" },
+    { type: "pickLang" }
+  );
+  expect(navReducer(picking, { type: "goRoot" })).toMatchObject({ query: "", savedQuery: "" });
+  expect(navReducer(picking, { type: "goMode", mode: "clipboard" })).toMatchObject({
+    query: "", savedQuery: "",
+  });
 });

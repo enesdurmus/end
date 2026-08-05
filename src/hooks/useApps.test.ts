@@ -17,11 +17,9 @@ test("loads apps, then patches in real icons as they resolve", async () => {
 
   const { result } = renderHook(() => useApps(runActions));
 
-  // first: app appears without an icon
   await waitFor(() => expect(result.current).toHaveLength(1));
   expect(result.current[0]).toMatchObject({ id: "app:/A/Safari.app", title: "Safari" });
 
-  // then: icon is patched in
   await waitFor(() => expect(result.current[0].icon).toBe("data:icon"));
 });
 
