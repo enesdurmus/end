@@ -1,9 +1,10 @@
 import { expect, test, vi } from "vitest";
-import { appToResult, clipToResult, snipToResult, fileToResult, buildResults } from "./results";
+import { appToResult, clipToResult, snipToResult, fileToResult, buildResults,
+         historyToResult, translationToResult, langToResult } from "./results";
 import { RunActions } from "./actions";
-import { Result } from "../types";
+import { Result, TranslationEntry } from "../types";
 
-const fakeActions = (): RunActions => ({ paste: vi.fn(), open: vi.fn() });
+const fakeActions = (): RunActions => ({ paste: vi.fn(), open: vi.fn(), copy: vi.fn(), record: vi.fn() });
 
 test("appToResult maps fields and run() opens the path", () => {
   const a = fakeActions();
@@ -37,28 +38,83 @@ test("snipToResult falls back to text when keyword empty", () => {
 const r = (title: string, extra: Partial<Result> = {}): Result =>
   ({ id: title, type: "app", title, run: () => {}, ...extra });
 
+const entry: TranslationEntry = { source: "merhaba", translated: "hello", from: "tr", to: "en" };
+
+const emptyData = { commands: [], apps: [], snips: [], clips: [], files: [], langs: [], translation: [], history: [] };
+
 test("buildResults clipboard mode: no query returns clips as-is, query fuzzy-filters", () => {
   const clips = [r("apple"), r("banana")];
-  const data = { commands: [], apps: [], snips: [], clips, files: [] };
-  expect(buildResults("clipboard", "", data)).toEqual(clips);
-  expect(buildResults("clipboard", "ban", data).map((x) => x.title)).toEqual(["banana"]);
+  const data = { ...emptyData, clips };
+  expect(buildResults("clipboard", "", data, false)).toEqual(clips);
+  expect(buildResults("clipboard", "ban", data, false).map((x) => x.title)).toEqual(["banana"]);
 });
 
 test("buildResults files mode returns files verbatim", () => {
   const files = [r("a"), r("b")];
-  expect(buildResults("files", "ignored", { commands: [], apps: [], snips: [], clips: [], files })).toEqual(files);
+  expect(buildResults("files", "ignored", { ...emptyData, files }, false)).toEqual(files);
 });
 
 test("buildResults root mode: commands, then apps, then snippets (snippets only when query)", () => {
   const commands = [r("Clipboard History", { aliases: ["clips"] })];
   const apps = [r("Calendar")];
   const snips = [r("clip snippet")];
-  const data = { commands, apps, snips, clips: [], files: [] };
+  const data = { ...emptyData, commands, apps, snips };
   // empty query -> no snippets, commands+apps in order
-  expect(buildResults("root", "", data).map((x) => x.title)).toEqual(["Clipboard History", "Calendar"]);
+  expect(buildResults("root", "", data, false).map((x) => x.title)).toEqual(["Clipboard History", "Calendar"]);
   // "clip" matches the command (via alias) and the snippet, not Calendar
-  const titles = buildResults("root", "clip", data).map((x) => x.title);
+  const titles = buildResults("root", "clip", data, false).map((x) => x.title);
   expect(titles).toContain("Clipboard History");
   expect(titles).toContain("clip snippet");
   expect(titles).not.toContain("Calendar");
+});
+
+test("historyToResult copies on Enter and pastes on ⌘Enter", () => {
+  const a = fakeActions();
+  const r = historyToResult(entry, 0, a);
+  expect(r).toMatchObject({ id: "trh:0", type: "translation", title: "hello", body: "merhaba" });
+  r.run();
+  expect(a.copy).toHaveBeenCalledWith("hello");
+  r.altRun!();
+  expect(a.paste).toHaveBeenCalledWith("hello");
+});
+
+test("historyToResult does not re-record an entry that is already in history", () => {
+  const a = fakeActions();
+  historyToResult(entry, 0, a).run();
+  expect(a.record).not.toHaveBeenCalled();
+});
+
+test("translationToResult records the entry when it is used", () => {
+  const a = fakeActions();
+  const r = translationToResult(entry, a);
+  r.run();
+  expect(a.copy).toHaveBeenCalledWith("hello");
+  expect(a.record).toHaveBeenCalledWith(entry);
+});
+
+test("langToResult reports the picked code", () => {
+  const onPick = vi.fn();
+  const r = langToResult({ code: "de", name: "German" }, onPick);
+  expect(r).toMatchObject({ id: "lang:de", type: "language", title: "German", subtitle: "de" });
+  r.run();
+  expect(onPick).toHaveBeenCalledWith("de");
+});
+
+test("buildResults shows languages while picking, filtered by the query", () => {
+  const langs = [
+    langToResult({ code: "ja", name: "Japanese" }, vi.fn()),
+    langToResult({ code: "de", name: "German" }, vi.fn()),
+  ];
+  const out = buildResults("translate", "jap", { ...emptyData, langs }, true);
+  expect(out.map((r) => r.id)).toEqual(["lang:ja"]);
+});
+
+test("buildResults shows history on a blank translate query", () => {
+  const history = [historyToResult(entry, 0, fakeActions())];
+  expect(buildResults("translate", "   ", { ...emptyData, history }, false)).toEqual(history);
+});
+
+test("buildResults shows the live translation once the user types", () => {
+  const translation = [translationToResult(entry, fakeActions())];
+  expect(buildResults("translate", "merhaba", { ...emptyData, translation, history: [] }, false)).toEqual(translation);
 });

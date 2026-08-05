@@ -1,7 +1,8 @@
-import { Result } from "../types";
+import { Result, TranslationEntry } from "../types";
 import { RunActions } from "./actions";
 import { fuzzyFilter } from "./fuzzy";
 import { Mode } from "./navigation";
+import { Language } from "./languages";
 
 // Raw shapes returned by the Rust backend.
 export type RawApp = { name: string; path: string };
@@ -48,16 +49,59 @@ export function snipToResult(s: RawSnippet, i: number, actions: RunActions): Res
   };
 }
 
+export function langToResult(l: Language, onPick: (code: string) => void): Result {
+  return {
+    id: "lang:" + l.code,
+    type: "language",
+    title: l.name,
+    subtitle: l.code,
+    run: () => onPick(l.code),
+  };
+}
+
+// A history row: already stored, so using it must not re-record it.
+export function historyToResult(e: TranslationEntry, i: number, actions: RunActions): Result {
+  return {
+    id: "trh:" + i,
+    type: "translation",
+    title: e.translated.replace(/\s+/g, " ").slice(0, 80),
+    subtitle: `${e.from} → ${e.to}`,
+    body: e.source,
+    run: () => actions.copy(e.translated),
+    altRun: () => actions.paste(e.translated),
+  };
+}
+
+// The live translation, as a single synthetic result so Enter/⌘Enter reuse the
+// same key handling as every other row. Using it is what writes it to history.
+export function translationToResult(e: TranslationEntry, actions: RunActions): Result {
+  return {
+    id: "tr:live",
+    type: "translation",
+    title: e.translated,
+    subtitle: `${e.from} → ${e.to}`,
+    body: e.translated,
+    run: () => { actions.record(e); return actions.copy(e.translated); },
+    altRun: () => { actions.record(e); return actions.paste(e.translated); },
+  };
+}
+
 export type ResultData = {
   commands: Result[];
   apps: Result[];
   snips: Result[];
   clips: Result[];
   files: Result[];
+  langs: Result[];
+  translation: Result[]; // 0 or 1 entries — the live translation
+  history: Result[];
 };
 
-// Mode-based composition of the visible result list. Mirrors the original App logic exactly.
-export function buildResults(mode: Mode, query: string, data: ResultData): Result[] {
+// Mode-based composition of the visible result list.
+export function buildResults(mode: Mode, query: string, data: ResultData, picking: boolean): Result[] {
+  // the picker borrows the whole list, whatever mode we are in
+  if (picking) return fuzzyFilter(query, data.langs, (r) => r.title);
+  if (mode === "translate") return query.trim() ? data.translation : data.history;
   if (mode === "clipboard") {
     return query.trim() ? fuzzyFilter(query, data.clips, (r) => r.title) : data.clips;
   }
