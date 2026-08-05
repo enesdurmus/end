@@ -14,19 +14,9 @@ export type RunActions = {
 export const runActions: RunActions = {
   paste: async (text) => { getCurrentWindow().hide(); await invoke("paste_text", { text }); },
   open: async (path) => { await invoke("open_path", { path }); getCurrentWindow().hide(); },
-  copy: async (text) => {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // e.g. an unfocused webview rejects the web clipboard API — fall back
-      // to the Rust-side clipboard write so Enter still does something.
-      try {
-        await invoke("write_clipboard", { text });
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    getCurrentWindow().hide();
-  },
+  // ponytail: arboard, not navigator.clipboard — the web API needs a focused
+  // document, which a launcher that hides itself cannot promise. Hide first,
+  // like paste, so a failed write can't strand the window open.
+  copy: async (text) => { getCurrentWindow().hide(); await invoke("write_clipboard", { text }); },
   record: async (entry) => { await invoke("record_translation", { entry }); },
 };

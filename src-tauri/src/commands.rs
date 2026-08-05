@@ -34,8 +34,8 @@ pub fn paste_text(text: String, state: tauri::State<ClipState>) -> Result<(), St
     Ok(())
 }
 
-// Clipboard-only: no paste, no focus restoration. Fallback for
-// `navigator.clipboard.writeText` when it throws (e.g. an unfocused webview).
+// Clipboard-only: no paste, no focus restoration. This is what Enter uses;
+// `paste_text` is the ⌘Enter variant that also pastes into the previous app.
 #[tauri::command]
 pub fn write_clipboard(text: String) -> Result<(), String> {
     let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
