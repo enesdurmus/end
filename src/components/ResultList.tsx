@@ -7,6 +7,8 @@ const LABELS: Record<Result["type"], string> = {
   clipboard: "Clipboard History",
   snippet: "Snippets",
   command: "Commands",
+  language: "Languages",
+  translation: "Translation History",
 };
 
 // ponytail: hue from title so icons look distinct without real app icons
