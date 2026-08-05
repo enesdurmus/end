@@ -64,9 +64,9 @@ export function historyToResult(e: TranslationEntry, i: number, actions: RunActi
   return {
     id: "trh:" + i,
     type: "translation",
-    title: e.translated.replace(/\s+/g, " ").slice(0, 80),
+    title: e.source.replace(/\s+/g, " ").slice(0, 80),
     subtitle: `${e.from} → ${e.to}`,
-    body: e.source,
+    body: e.translated,
     run: () => actions.copy(e.translated),
     altRun: () => actions.paste(e.translated),
   };

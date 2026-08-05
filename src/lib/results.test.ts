@@ -71,7 +71,7 @@ test("buildResults root mode: commands, then apps, then snippets (snippets only 
 test("historyToResult copies on Enter and pastes on ⌘Enter", () => {
   const a = fakeActions();
   const r = historyToResult(entry, 0, a);
-  expect(r).toMatchObject({ id: "trh:0", type: "translation", title: "hello", body: "merhaba" });
+  expect(r).toMatchObject({ id: "trh:0", type: "translation", title: "merhaba", body: "hello" });
   r.run();
   expect(a.copy).toHaveBeenCalledWith("hello");
   r.altRun!();

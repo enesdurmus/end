@@ -17,6 +17,7 @@ export function useTranslate(mode: Mode, query: string, source: string, target: 
     if (!text) { setEntry(null); setError(""); setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
+    setError("");
     const t = setTimeout(() => {
       // "auto" means "let the backend detect"; only a pinned source is sent
       invoke<Raw>("translate", { text, from: source === "auto" ? null : source, to: target })

@@ -40,22 +40,36 @@ export default function App() {
   const { history, load: loadHistory, clear: clearHistory } = useTranslateHistory(runActions);
   const { entry, loading, error } = useTranslate(mode, query, source, target);
 
-  // seed the language pair from the persisted preferences once
-  useEffect(() => {
+  // Preferences and the launcher are separate windows and neither is
+  // destroyed on close, so a mount-time-only read goes stale the moment the
+  // user changes "Translate To" in Preferences and comes back. Re-read on
+  // mount (so the status bar has something to show before translate mode is
+  // ever entered) AND on every entry into translate mode, rather than
+  // trusting a frozen mount-time value. Safe to clobber `target` on entry:
+  // ⌘P persists to disk before the next entry, so a pick made earlier in
+  // this same session is never lost.
+  const refreshLangs = useCallback(() => {
     invoke<{ translate_target: string }>("get_preferences").then((p) =>
       dispatch({ type: "setLangs", source: "auto", target: p.translate_target })
     );
   }, []);
+  useEffect(() => { refreshLangs(); }, [refreshLangs]);
+  const enterTranslate = useCallback(() => {
+    loadHistory();
+    refreshLangs();
+  }, [loadHistory, refreshLangs]);
 
   const pickTarget = useCallback((code: string) => {
     dispatch({ type: "setTarget", code });
     // target only — the engine choice belongs to the Preferences window
-    invoke("set_translate_prefs", { target: code, provider: null });
+    invoke("set_translate_prefs", { target: code, provider: null }).catch((e) =>
+      console.error(e)
+    );
   }, []);
 
   const commands = useMemo(
-    () => buildCommands(dispatch, loadClips, loadHistory),
-    [loadClips, loadHistory]
+    () => buildCommands(dispatch, loadClips, enterTranslate),
+    [loadClips, enterTranslate]
   );
   const langs = useMemo(() => LANGUAGES.map((l) => langToResult(l, pickTarget)), [pickTarget]);
   const translation = useMemo(

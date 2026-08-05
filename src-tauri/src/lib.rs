@@ -54,6 +54,7 @@ pub fn run() {
             commands::search_files,
             commands::clipboard_history,
             commands::paste_text,
+            commands::write_clipboard,
             commands::list_snippets,
             commands::save_snippets,
             commands::get_preferences,

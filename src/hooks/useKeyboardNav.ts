@@ -26,8 +26,8 @@ export function useKeyboardNav({
 
       // translate-only shortcuts; advertised in the status bar
       if (mode === "translate" && e.metaKey) {
-        if (e.key === "p") { e.preventDefault(); dispatch({ type: "pickLang" }); return; }
-        if (e.key === "s") { e.preventDefault(); dispatch({ type: "swap", detected }); return; }
+        if (e.key === "p" && !picking) { e.preventDefault(); dispatch({ type: "pickLang" }); return; }
+        if (e.key === "s" && !picking) { e.preventDefault(); dispatch({ type: "swap", detected }); return; }
         if (e.key === "Backspace" && !query.trim() && !picking) {
           e.preventDefault();
           onClearHistory();

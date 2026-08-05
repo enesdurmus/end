@@ -2,8 +2,24 @@
 //! `Provider` variant, a `match` arm in `fetch`, and its own request function.
 
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
+use std::time::Duration;
 
 const GOOGLE_ENDPOINT: &str = "https://translate.googleapis.com/translate_a/single";
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+// Built once and reused: a fresh `reqwest::Client` per call would open a new
+// connection pool and redo the TLS handshake on every debounce tick.
+fn client() -> &'static reqwest::Client {
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .expect("failed to build reqwest client")
+    })
+}
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
 #[serde(rename_all = "lowercase")]
@@ -31,7 +47,7 @@ pub async fn fetch(
 }
 
 async fn google(text: &str, from: &str, to: &str) -> Result<Translation, String> {
-    let body = reqwest::Client::new()
+    let resp = client()
         .get(GOOGLE_ENDPOINT)
         .query(&[
             ("client", "gtx"),
@@ -42,13 +58,30 @@ async fn google(text: &str, from: &str, to: &str) -> Result<Translation, String>
         ])
         .send()
         .await
-        .map_err(|e| e.to_string())?
-        .error_for_status()
-        .map_err(|e| e.to_string())?
+        // reqwest's Display appends " for url (...)", and the url contains the
+        // user's typed text as a query param — never surface it to the UI.
+        .map_err(|_| "translation request failed".to_string())?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(status_error_message(status));
+    }
+
+    let body = resp
         .text()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "translation request failed".to_string())?;
     parse_google(&body)
+}
+
+// Pure so it's testable without a network call: maps a failing status to a
+// short, human-readable message that never contains request/response data.
+fn status_error_message(status: reqwest::StatusCode) -> String {
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        "translation rate limit reached, try again shortly".to_string()
+    } else {
+        format!("translation failed (status {})", status.as_u16())
+    }
 }
 
 // The endpoint answers with a bare nested array:
@@ -108,5 +141,18 @@ mod tests {
         assert!(parse_google(r#"{"error":"quota"}"#).is_err());
         assert!(parse_google("not json at all").is_err());
         assert!(parse_google("[]").is_err());
+    }
+
+    #[test]
+    fn status_error_message_never_leaks_query_text() {
+        let query_text = "my bank password is hunter2";
+        let msg = status_error_message(reqwest::StatusCode::TOO_MANY_REQUESTS);
+        assert!(!msg.contains(query_text));
+        assert!(!msg.contains("url"));
+        assert!(msg.to_lowercase().contains("rate limit"));
+
+        let msg = status_error_message(reqwest::StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(!msg.contains(query_text));
+        assert!(msg.contains("500"));
     }
 }
