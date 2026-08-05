@@ -1,13 +1,18 @@
 // Pure state machine for the launcher UI. No DOM, no Tauri — fully testable.
 // Side effects (e.g. loading clipboard history) live in the caller, not here.
 
-export type Mode = "root" | "clipboard" | "files";
+export type Mode = "root" | "clipboard" | "files" | "translate";
 
 export type NavState = {
   mode: Mode;
   query: string;
   selected: number;
   managing: boolean;
+  // translate mode
+  picking: boolean;    // language picker is showing in place of the results
+  source: string;      // "auto" until the user pins it via swap
+  target: string;
+  savedQuery: string;  // text held while the picker borrows the search box
 };
 
 export type NavAction =
@@ -16,9 +21,23 @@ export type NavAction =
   | { type: "goMode"; mode: Exclude<Mode, "root"> }
   | { type: "goRoot" }
   | { type: "manage" }
-  | { type: "closeManage" };
+  | { type: "closeManage" }
+  | { type: "setLangs"; source: string; target: string }
+  | { type: "pickLang" }
+  | { type: "setTarget"; code: string }
+  | { type: "cancelPick" }
+  | { type: "swap"; detected: string };
 
-export const initialNav: NavState = { mode: "root", query: "", selected: 0, managing: false };
+export const initialNav: NavState = {
+  mode: "root",
+  query: "",
+  selected: 0,
+  managing: false,
+  picking: false,
+  source: "auto",
+  target: "en",
+  savedQuery: "",
+};
 
 export function navReducer(s: NavState, a: NavAction): NavState {
   switch (a.type) {
@@ -29,12 +48,26 @@ export function navReducer(s: NavState, a: NavAction): NavState {
     case "move":
       return { ...s, selected: Math.max(0, Math.min(s.selected + a.delta, a.max - 1)) };
     case "goMode":
-      return { ...s, mode: a.mode, query: "", selected: 0, managing: false };
+      return { ...s, mode: a.mode, query: "", selected: 0, managing: false, picking: false };
     case "goRoot":
-      return { ...s, mode: "root", query: "", selected: 0, managing: false };
+      return { ...s, mode: "root", query: "", selected: 0, managing: false, picking: false };
     case "manage":
       return { ...s, managing: true, query: "" };
     case "closeManage":
       return { ...s, managing: false };
+    case "setLangs":
+      return { ...s, source: a.source, target: a.target };
+    // the picker borrows the search box, so park the typed text until it closes
+    case "pickLang":
+      return { ...s, picking: true, savedQuery: s.query, query: "", selected: 0 };
+    case "setTarget":
+      return { ...s, picking: false, target: a.code, query: s.savedQuery, savedQuery: "", selected: 0 };
+    case "cancelPick":
+      return { ...s, picking: false, query: s.savedQuery, savedQuery: "", selected: 0 };
+    // "auto" has no direction to flip, so the detected language stands in for it
+    case "swap": {
+      const from = s.source === "auto" ? a.detected : s.source;
+      return { ...s, source: s.target, target: from, selected: 0 };
+    }
   }
 }
