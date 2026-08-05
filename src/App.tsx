@@ -56,7 +56,7 @@ export default function App() {
       ) : (
         <ResultList results={results} selected={selected} />
       )}
-      <StatusBar count={results.length} />
+      <StatusBar left={`${results.length} results`} hints={[["Open", "↵"], ["Close", "esc"]]} />
     </Window>
   );
 }
