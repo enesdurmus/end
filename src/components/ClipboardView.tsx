@@ -1,7 +1,6 @@
 import { Result } from "../types";
 import { ResultList } from "./ResultList";
 
-// Split layout for clipboard mode: result list on the left, full-text preview on the right.
 export function ClipboardView({ results, selected }: { results: Result[]; selected: number }) {
   const body = results[selected]?.body;
   return (

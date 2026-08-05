@@ -3,7 +3,6 @@ import { listen } from "@tauri-apps/api/event";
 import { Dispatch } from "react";
 import { NavAction } from "../lib/navigation";
 
-// Global-shortcut driven navigation from the Rust side.
 export function useLauncherEvents(dispatch: Dispatch<NavAction>, loadClips: () => void) {
   useEffect(() => {
     const uns = [

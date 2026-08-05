@@ -1,6 +1,5 @@
 import { TranslationEntry } from "../types";
 
-// The typed state of translate mode: one big translated block, nothing else.
 // The blank-query state uses ClipboardView (history list + preview) instead.
 export function TranslateView({
   entry,

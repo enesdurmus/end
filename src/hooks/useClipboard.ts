@@ -4,7 +4,6 @@ import { Result } from "../types";
 import { RunActions } from "../lib/actions";
 import { clipToResult } from "../lib/results";
 
-// Clipboard history is loaded on demand (when entering clipboard mode), not on mount.
 export function useClipboard(actions: RunActions): { clips: Result[]; load: () => void } {
   const [clips, setClips] = useState<Result[]>([]);
 

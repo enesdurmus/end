@@ -1,12 +1,10 @@
 use std::path::{Path, PathBuf};
 
-// The cap is a runtime setting now (see preferences::history_limit), passed into push_capped.
-
 pub fn push_capped(list: &mut Vec<String>, item: String, cap: usize) {
     if list.first() == Some(&item) {
-        return; // same consecutive entry → ignore
+        return;
     }
-    list.retain(|x| x != &item); // drop existing duplicate, we'll move it to front
+    list.retain(|x| x != &item);
     list.insert(0, item);
     if list.len() > cap {
         list.truncate(cap);
@@ -40,7 +38,7 @@ mod tests {
         let mut l = Vec::new();
         for i in 0..600 { push_capped(&mut l, i.to_string(), CAP); }
         assert_eq!(l.len(), CAP);
-        assert_eq!(l[0], "599"); // newest at front
+        assert_eq!(l[0], "599");
     }
     #[test]
     fn duplicate_moved_to_front_consecutive_ignored() {
@@ -49,7 +47,7 @@ mod tests {
         push_capped(&mut l, "b".into(), CAP);
         push_capped(&mut l, "a".into(), CAP);
         assert_eq!(l, vec!["a", "b"]);
-        push_capped(&mut l, "a".into(), CAP); // same consecutive → ignore
+        push_capped(&mut l, "a".into(), CAP);
         assert_eq!(l, vec!["a", "b"]);
     }
 }

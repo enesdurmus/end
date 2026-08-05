@@ -8,7 +8,6 @@ export type NavState = {
   query: string;
   selected: number;
   managing: boolean;
-  // translate mode
   picking: boolean;    // language picker is showing in place of the results
   source: string;      // "auto" until the user pins it via swap
   target: string;

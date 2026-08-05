@@ -15,7 +15,6 @@ type Args = {
   inputRef: RefObject<HTMLInputElement | null>;
 };
 
-// Owns all global keyboard behavior: type-to-focus, arrow nav, Enter to run, Esc/Backspace to go back.
 export function useKeyboardNav({
   dispatch, results, selected, mode, query, picking, detected, onClearHistory, inputRef,
 }: Args) {

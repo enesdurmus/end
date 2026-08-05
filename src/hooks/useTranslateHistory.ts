@@ -4,7 +4,6 @@ import { Result, TranslationEntry } from "../types";
 import { RunActions } from "../lib/actions";
 import { historyToResult } from "../lib/results";
 
-// Loaded on demand (when entering translate mode), like useClipboard.
 export function useTranslateHistory(actions: RunActions) {
   const [history, setHistory] = useState<Result[]>([]);
 

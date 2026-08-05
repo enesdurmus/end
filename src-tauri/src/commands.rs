@@ -28,7 +28,6 @@ pub fn clipboard_history(state: tauri::State<ClipState>) -> Vec<String> {
 pub fn paste_text(text: String, state: tauri::State<ClipState>) -> Result<(), String> {
     let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     cb.set_text(text).map_err(|e| e.to_string())?;
-    // reactivate the app that was frontmost before us, then paste into it
     let prev = state.prev_app.lock().unwrap().take();
     host().paste(prev);
     Ok(())
@@ -110,7 +109,6 @@ pub fn set_history_limit(
     }
     clipboard::save(&state.dir, &list);
 
-    // persist so the limit survives a restart
     let mut prefs = preferences::load(&state.dir);
     prefs.history_limit = limit;
     preferences::save(&state.dir, &prefs)

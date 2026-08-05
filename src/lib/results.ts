@@ -4,7 +4,6 @@ import { fuzzyFilter } from "./fuzzy";
 import { Mode } from "./navigation";
 import { Language } from "./languages";
 
-// Raw shapes returned by the Rust backend.
 export type RawApp = { name: string; path: string };
 export type RawFile = { name: string; path: string };
 export type RawSnippet = { keyword: string; text: string };
@@ -97,7 +96,6 @@ export type ResultData = {
   history: Result[];
 };
 
-// Mode-based composition of the visible result list.
 export function buildResults(mode: Mode, query: string, data: ResultData, picking: boolean): Result[] {
   // the picker borrows the whole list, whatever mode we are in
   if (picking) return fuzzyFilter(query, data.langs, (r) => r.title);

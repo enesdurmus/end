@@ -10,7 +10,6 @@ use crate::platform::{host, Platform};
 use crate::preferences;
 use crate::state::{ClipState, ShortcutsState};
 
-/// Register the persisted shortcuts and return the state to be `manage`d.
 pub fn register<R: Runtime>(
     app: &AppHandle<R>,
     dir: std::path::PathBuf,
@@ -27,7 +26,6 @@ pub fn register<R: Runtime>(
     })
 }
 
-/// Handle a shortcut press: toggle the launcher, or open it in clipboard mode.
 pub fn on_press<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, event: ShortcutEvent) {
     if event.state() != ShortcutState::Pressed {
         return;

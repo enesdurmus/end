@@ -2,7 +2,6 @@ import { Dispatch } from "react";
 import { Result } from "./types";
 import { NavAction } from "./lib/navigation";
 
-// Mode-switch commands, Raycast-style: fuzzy-searchable in root, Enter switches view.
 export function buildCommands(
   dispatch: Dispatch<NavAction>,
   loadClips: () => void,

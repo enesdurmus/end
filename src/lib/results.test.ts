@@ -34,7 +34,6 @@ test("snipToResult falls back to text when keyword empty", () => {
   expect(snipToResult({ keyword: "sig", text: "sig block" }, 0, a).title).toBe("sig");
 });
 
-// helpers to build Result stubs for buildResults
 const r = (title: string, extra: Partial<Result> = {}): Result =>
   ({ id: title, type: "app", title, run: () => {}, ...extra });
 
@@ -59,9 +58,7 @@ test("buildResults root mode: commands, then apps, then snippets (snippets only 
   const apps = [r("Calendar")];
   const snips = [r("clip snippet")];
   const data = { ...emptyData, commands, apps, snips };
-  // empty query -> no snippets, commands+apps in order
   expect(buildResults("root", "", data, false).map((x) => x.title)).toEqual(["Clipboard History", "Calendar"]);
-  // "clip" matches the command (via alias) and the snippet, not Calendar
   const titles = buildResults("root", "clip", data, false).map((x) => x.title);
   expect(titles).toContain("Clipboard History");
   expect(titles).toContain("clip snippet");
