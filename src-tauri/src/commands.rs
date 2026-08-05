@@ -10,8 +10,9 @@ use crate::clipboard;
 use crate::platform::{host, AppEntry, Platform};
 use crate::preferences;
 use crate::snippets;
-use crate::state::{ClipState, ShortcutsState};
+use crate::state::{ClipState, ShortcutsState, TranslateState};
 use crate::translate::{Provider, Translation};
+use crate::translate_history::{self, Entry};
 
 #[tauri::command]
 pub fn list_apps() -> Vec<AppEntry> {
@@ -147,4 +148,25 @@ pub fn check_accessibility() -> bool {
 #[tauri::command]
 pub fn open_accessibility_settings() -> Result<(), String> {
     host().open_accessibility_settings()
+}
+
+#[tauri::command]
+pub fn translate_history(state: tauri::State<TranslateState>) -> Vec<Entry> {
+    state.list.lock().unwrap().clone()
+}
+
+#[tauri::command]
+pub fn record_translation(entry: Entry, state: tauri::State<TranslateState>) -> Result<(), String> {
+    let mut list = state.list.lock().unwrap();
+    translate_history::push_capped(&mut list, entry, translate_history::HISTORY_LIMIT);
+    translate_history::save(&state.dir, &list);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn clear_translate_history(state: tauri::State<TranslateState>) -> Result<(), String> {
+    let mut list = state.list.lock().unwrap();
+    list.clear();
+    translate_history::save(&state.dir, &list);
+    Ok(())
 }

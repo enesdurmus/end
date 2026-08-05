@@ -20,3 +20,9 @@ pub struct ShortcutsState {
     pub clipboard: Mutex<Shortcut>,
     pub dir: PathBuf,
 }
+
+/// Persisted translation history, loaded once at startup.
+pub struct TranslateState {
+    pub list: Mutex<Vec<crate::translate_history::Entry>>,
+    pub dir: PathBuf,
+}

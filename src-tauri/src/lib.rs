@@ -6,6 +6,7 @@ mod shortcuts;
 mod snippets;
 mod state;
 mod translate;
+mod translate_history;
 mod tray;
 mod watcher;
 mod windows;
@@ -39,6 +40,10 @@ pub fn run() {
                 prev_app: Mutex::new(None),
                 limit: AtomicUsize::new(limit),
             });
+            app.manage(state::TranslateState {
+                list: Mutex::new(translate_history::load(&dir)),
+                dir: dir.clone(),
+            });
             watcher::spawn(handle.clone());
             Ok(())
         })
@@ -57,7 +62,10 @@ pub fn run() {
             commands::check_accessibility,
             commands::open_accessibility_settings,
             commands::translate,
-            commands::set_translate_prefs
+            commands::set_translate_prefs,
+            commands::translate_history,
+            commands::record_translation,
+            commands::clear_translate_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
