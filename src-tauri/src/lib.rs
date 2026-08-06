@@ -1,5 +1,6 @@
 mod clipboard;
 mod commands;
+mod focus;
 mod platform;
 mod preferences;
 mod shortcuts;
@@ -28,6 +29,7 @@ pub fn run() {
             let dir = app.path().app_config_dir().unwrap();
             let handle = app.handle();
 
+            app.manage(focus::Focus::new(app.config().identifier.clone()));
             app.manage(shortcuts::register(handle, dir.clone())?);
             tray::build(handle)?;
             windows::wire(handle);
@@ -37,7 +39,6 @@ pub fn run() {
             app.manage(state::ClipState {
                 list: Mutex::new(initial),
                 dir: dir.clone(),
-                prev_app: Mutex::new(None),
                 limit: AtomicUsize::new(limit),
             });
             app.manage(state::TranslateState {
@@ -55,6 +56,7 @@ pub fn run() {
             commands::clipboard_history,
             commands::paste_text,
             commands::write_clipboard,
+            commands::close_launcher,
             commands::list_snippets,
             commands::save_snippets,
             commands::get_preferences,

@@ -22,12 +22,16 @@ impl Platform for Linux {
         Vec::new() // TODO: plocate/locate, or a walk of common dirs
     }
 
-    fn frontmost_app(&self) -> Option<String> {
+    fn app_behind(&self, _own: &str) -> Option<String> {
         None // TODO: xdotool getactivewindow (X11) / no portable Wayland equivalent
     }
 
+    fn restore_focus(&self, _prev: Option<String>) {
+        // TODO: xdotool windowactivate prev
+    }
+
     fn paste(&self, _prev: Option<String>) {
-        // TODO: ydotool/xdotool key ctrl+v after refocusing prev
+        // TODO: restore_focus, then ydotool/xdotool key ctrl+v
     }
 
     fn accessibility_granted(&self) -> bool {

@@ -3,12 +3,10 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Mutex;
 use tauri_plugin_global_shortcut::Shortcut;
 
-/// Clipboard history plus the focus we need to restore after a paste.
+/// Clipboard history. Focus lives in `crate::focus`, not here.
 pub struct ClipState {
     pub list: Mutex<Vec<String>>,
     pub dir: PathBuf,
-    // bundle id of the app that was frontmost before we stole focus
-    pub prev_app: Mutex<Option<String>>,
     // max entries kept; user-editable, read lock-free by the watcher thread
     pub limit: AtomicUsize,
 }
