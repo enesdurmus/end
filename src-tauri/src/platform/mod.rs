@@ -20,10 +20,14 @@ pub trait Platform: Send + Sync {
     fn open_path(&self, path: &str) -> Result<(), String>;
     /// Search the system file index by name.
     fn search_files(&self, query: &str) -> Vec<AppEntry>;
-    /// Identity of the currently-frontmost app, so focus can be restored after paste.
-    fn frontmost_app(&self) -> Option<String>;
-    /// Reactivate `prev` (if any) and synthesize the paste keystroke.
-    /// The clipboard contents are set by the caller beforehand.
+    /// The frontmost app that isn't `own`, i.e. where focus should go when we step
+    /// aside. Excluding ourselves is the point: by the time the launcher is asking,
+    /// it may already be the active app.
+    fn app_behind(&self, own: &str) -> Option<String>;
+    /// Bring `prev` (if any) back to the front.
+    fn restore_focus(&self, prev: Option<String>);
+    /// Bring `prev` back to the front, then synthesize the paste keystroke.
+    /// Clipboard contents are set by the caller beforehand.
     fn paste(&self, prev: Option<String>);
     /// Whether the OS has granted the input-synthesis / accessibility permission.
     fn accessibility_granted(&self) -> bool;

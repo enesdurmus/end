@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { TranslationEntry } from "../types";
 
 // Injected into result mappers so those stay pure/testable.
@@ -10,12 +9,12 @@ export type RunActions = {
   record: (entry: TranslationEntry) => Promise<void> | void;
 };
 
+// Hiding the window and handing focus back belongs to src-tauri/src/focus.rs; doing it
+// here raced the paste keystroke. Copy goes through arboard for the same reason —
+// navigator.clipboard needs a focused document we're in the middle of giving away.
 export const runActions: RunActions = {
-  paste: async (text) => { getCurrentWindow().hide(); await invoke("paste_text", { text }); },
-  open: async (path) => { await invoke("open_path", { path }); getCurrentWindow().hide(); },
-  // ponytail: arboard, not navigator.clipboard — the web API needs a focused
-  // document, which a launcher that hides itself cannot promise. Hide first,
-  // like paste, so a failed write can't strand the window open.
-  copy: async (text) => { getCurrentWindow().hide(); await invoke("write_clipboard", { text }); },
-  record: async (entry) => { await invoke("record_translation", { entry }); },
+  paste: (text) => invoke("paste_text", { text }),
+  open: (path) => invoke("open_path", { path }),
+  copy: (text) => invoke("write_clipboard", { text }),
+  record: (entry) => invoke("record_translation", { entry }),
 };

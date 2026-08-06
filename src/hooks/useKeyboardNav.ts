@@ -1,5 +1,5 @@
 import { Dispatch, RefObject, useEffect } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import { Result } from "../types";
 import { Mode, NavAction } from "../lib/navigation";
 
@@ -36,7 +36,7 @@ export function useKeyboardNav({
 
       if (e.key === "Escape") {
         if (picking) dispatch({ type: "cancelPick" });
-        else if (mode === "root") getCurrentWindow().hide();
+        else if (mode === "root") invoke("close_launcher");
         else dispatch({ type: "goRoot" });
       } else if (e.key === "Backspace" && query === "" && mode !== "root") {
         if (picking) dispatch({ type: "cancelPick" });

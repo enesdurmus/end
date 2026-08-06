@@ -80,45 +80,27 @@ impl Platform for MacOs {
         out
     }
 
-    // ponytail: lsappinfo (~10ms, no Automation permission) instead of
-    // osascript+System Events (~400ms). Blocks the shortcut path, so it must stay fast.
-    fn frontmost_app(&self) -> Option<String> {
-        let asn = Command::new("lsappinfo").arg("front").output().ok()?;
-        let asn = String::from_utf8_lossy(&asn.stdout).trim().to_string();
-        if asn.is_empty() {
-            return None;
-        }
-        let out = Command::new("lsappinfo")
-            .args(["info", "-only", "bundleid", &asn])
-            .output()
-            .ok()?;
-        // output looks like: "CFBundleIdentifier"="com.foo.bar"
-        let line = String::from_utf8_lossy(&out.stdout);
-        let id = line.rsplit('=').next()?.trim().trim_matches('"');
-        if id.is_empty() {
-            None
-        } else {
-            Some(id.to_string())
+    // `lsappinfo front` cannot answer this: once the launcher is the active app it just
+    // returns us. visibleProcessList is front-to-back activation order, so the answer is
+    // the first entry that isn't us.
+    //
+    // ponytail: lsappinfo (~10ms, no Automation permission) instead of osascript+System
+    // Events (~400ms). Blocks the shortcut path, so it must stay fast — hence the take(5),
+    // since each ASN costs another call and the answer is realistically 1st or 2nd.
+    fn app_behind(&self, own: &str) -> Option<String> {
+        let out = Command::new("lsappinfo").arg("visibleProcessList").output().ok()?;
+        let list = String::from_utf8_lossy(&out.stdout);
+        asns(&list).iter().take(5).filter_map(|asn| bundle_id(asn)).find(|id| id != own)
+    }
+
+    fn restore_focus(&self, prev: Option<String>) {
+        if let Some(id) = prev {
+            run(activate_script(&id));
         }
     }
 
     fn paste(&self, prev: Option<String>) {
-        // ponytail: activation is async on macOS, so poll until the target is actually
-        // frontmost (bounded) instead of gambling on a fixed delay, then Cmd+V.
-        let script = match prev {
-            Some(id) => format!(
-                "tell application id \"{id}\" to activate\n\
-                 repeat 25 times\n\
-                   tell application \"System Events\" to if (bundle identifier of first application process whose frontmost is true) is \"{id}\" then exit repeat\n\
-                   delay 0.02\n\
-                 end repeat\n\
-                 tell application \"System Events\" to keystroke \"v\" using command down",
-            ),
-            None => "delay 0.15\ntell application \"System Events\" to keystroke \"v\" using command down".to_string(),
-        };
-        std::thread::spawn(move || {
-            let _ = Command::new("osascript").args(["-e", &script]).output();
-        });
+        run(paste_script(prev.as_deref()));
     }
 
     fn accessibility_granted(&self) -> bool {
@@ -194,4 +176,91 @@ fn b64(data: &[u8]) -> String {
         s.push(if c.len() > 2 { T[(n & 63) as usize] as char } else { '=' });
     }
     s
+}
+
+/// Pulls the ASNs out of a `lsappinfo visibleProcessList` line, front-to-back.
+/// Entries look like `ASN:0x0-0x19019-"WezTerm":`.
+fn asns(list: &str) -> Vec<String> {
+    list.split_whitespace()
+        .filter_map(|e| e.split_once("-\"").map(|(asn, _)| asn.to_string()))
+        .collect()
+}
+
+fn bundle_id(asn: &str) -> Option<String> {
+    let out = Command::new("lsappinfo").args(["info", "-only", "bundleid", asn]).output().ok()?;
+    // output looks like: "CFBundleIdentifier"="com.foo.bar"
+    let line = String::from_utf8_lossy(&out.stdout);
+    let id = line.rsplit('=').next()?.trim().trim_matches('"').to_string();
+    Some(id).filter(|id| !id.is_empty())
+}
+
+const KEYSTROKE: &str = "\ntell application \"System Events\" to keystroke \"v\" using command down";
+
+/// ponytail: activation is async on macOS, so this polls (bounded) rather than gambling
+/// on a fixed delay — otherwise a following keystroke lands in the launcher and the
+/// paste silently becomes a copy.
+fn activate_script(id: &str) -> String {
+    format!(
+        "tell application id \"{id}\" to activate\n\
+         repeat 25 times\n\
+           tell application \"System Events\" to if (bundle identifier of first application process whose frontmost is true) is \"{id}\" then exit repeat\n\
+           delay 0.02\n\
+         end repeat"
+    )
+}
+
+fn paste_script(prev: Option<&str>) -> String {
+    match prev {
+        Some(id) => activate_script(id) + KEYSTROKE,
+        // No target: lean on macOS's own focus restoration, the best available guess
+        None => format!("delay 0.15{KEYSTROKE}"),
+    }
+}
+
+fn run(script: String) {
+    std::thread::spawn(move || {
+        let _ = Command::new("osascript").args(["-e", &script]).output();
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{activate_script, asns, paste_script};
+
+    #[test]
+    fn asns_are_parsed_front_to_back() {
+        // verbatim `lsappinfo visibleProcessList` output
+        let list = "ASN:0x0-0x19019-\"WezTerm\": ASN:0x0-0x53053-\"Firefox\": \
+                    ASN:0x0-0x367367-\"Launcher\": ASN:0x0-0x2c02c-\"Finder\":";
+        assert_eq!(
+            asns(list),
+            ["ASN:0x0-0x19019", "ASN:0x0-0x53053", "ASN:0x0-0x367367", "ASN:0x0-0x2c02c"]
+        );
+    }
+
+    #[test]
+    fn unparseable_process_list_yields_no_asns() {
+        assert!(asns("").is_empty());
+        assert!(asns("garbage without quotes").is_empty());
+    }
+
+    #[test]
+    fn activating_waits_for_the_app_to_be_frontmost() {
+        let s = activate_script("com.apple.TextEdit");
+        assert!(s.starts_with("tell application id \"com.apple.TextEdit\" to activate"));
+        assert!(s.contains("exit repeat"), "must poll, not blind-delay: {s}");
+        assert!(!s.contains("keystroke"), "focus restore must not paste: {s}");
+    }
+
+    #[test]
+    fn pasting_activates_first_then_types() {
+        let s = paste_script(Some("com.apple.TextEdit"));
+        assert!(s.starts_with(&activate_script("com.apple.TextEdit")));
+        assert!(s.trim_end().ends_with("keystroke \"v\" using command down"));
+    }
+
+    #[test]
+    fn pasting_without_a_target_still_types() {
+        assert!(paste_script(None).contains("keystroke"));
+    }
 }

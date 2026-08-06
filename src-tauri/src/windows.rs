@@ -6,6 +6,8 @@ pub fn wire<R: Runtime>(app: &AppHandle<R>) {
     let main = app.get_webview_window("main").unwrap();
     let main2 = main.clone();
     main.on_window_event(move |e| {
+        // Hide only — deliberately not focus::hide. Losing focus means the user
+        // already moved somewhere else; restoring focus here would yank them back.
         if let WindowEvent::Focused(false) = e {
             let _ = main2.hide();
         }

@@ -6,9 +6,9 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
 
-use crate::platform::{host, Platform};
+use crate::focus;
 use crate::preferences;
-use crate::state::{ClipState, ShortcutsState};
+use crate::state::ShortcutsState;
 
 pub fn register<R: Runtime>(
     app: &AppHandle<R>,
@@ -37,21 +37,13 @@ pub fn on_press<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, event: Shor
 
     if is_toggle {
         if w.is_visible().unwrap_or(false) {
-            let _ = w.hide();
+            focus::hide(app);
         } else {
-            *app.state::<ClipState>().prev_app.lock().unwrap() = None;
-            let _ = w.center();
-            let _ = w.show();
-            let _ = w.set_focus();
+            focus::show(app);
             let _ = w.emit("focus-search", ());
         }
     } else if is_clipboard {
-        // remember who was frontmost before we take focus
-        let prev = host().frontmost_app();
-        *app.state::<ClipState>().prev_app.lock().unwrap() = prev;
-        let _ = w.center();
-        let _ = w.show();
-        let _ = w.set_focus();
+        focus::show(app);
         let _ = w.emit("clipboard-mode", ());
     }
 }

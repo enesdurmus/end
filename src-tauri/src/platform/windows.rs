@@ -23,12 +23,16 @@ impl Platform for Windows {
         Vec::new() // TODO: Windows Search (ISearchQueryHelper) or Everything SDK
     }
 
-    fn frontmost_app(&self) -> Option<String> {
+    fn app_behind(&self, _own: &str) -> Option<String> {
         None // TODO: GetForegroundWindow + GetWindowThreadProcessId
     }
 
+    fn restore_focus(&self, _prev: Option<String>) {
+        // TODO: SetForegroundWindow(prev)
+    }
+
     fn paste(&self, _prev: Option<String>) {
-        // TODO: SetForegroundWindow(prev) then SendInput Ctrl+V
+        // TODO: restore_focus, then SendInput Ctrl+V
     }
 
     fn accessibility_granted(&self) -> bool {

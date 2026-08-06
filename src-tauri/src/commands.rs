@@ -7,6 +7,7 @@ use tauri::Manager;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
 use crate::clipboard;
+use crate::focus;
 use crate::platform::{host, AppEntry, Platform};
 use crate::preferences;
 use crate::snippets;
@@ -24,26 +25,36 @@ pub fn clipboard_history(state: tauri::State<ClipState>) -> Vec<String> {
     state.list.lock().unwrap().clone()
 }
 
-#[tauri::command]
-pub fn paste_text(text: String, state: tauri::State<ClipState>) -> Result<(), String> {
-    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    cb.set_text(text).map_err(|e| e.to_string())?;
-    let prev = state.prev_app.lock().unwrap().take();
-    host().paste(prev);
-    Ok(())
-}
-
-// Clipboard-only: no paste, no focus restoration. This is what Enter uses;
-// `paste_text` is the ⌘Enter variant that also pastes into the previous app.
-#[tauri::command]
-pub fn write_clipboard(text: String) -> Result<(), String> {
+fn set_clipboard(text: String) -> Result<(), String> {
     let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     cb.set_text(text).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn open_path(path: String) -> Result<(), String> {
-    host().open_path(&path)
+pub fn paste_text(text: String, app: tauri::AppHandle) -> Result<(), String> {
+    set_clipboard(text)?;
+    focus::hide_and_paste(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn write_clipboard(text: String, app: tauri::AppHandle) -> Result<(), String> {
+    set_clipboard(text)?;
+    focus::hide(&app);
+    Ok(())
+}
+
+/// Escape / dismiss.
+#[tauri::command]
+pub fn close_launcher(app: tauri::AppHandle) {
+    focus::hide(&app);
+}
+
+#[tauri::command]
+pub fn open_path(path: String, app: tauri::AppHandle) -> Result<(), String> {
+    host().open_path(&path)?;
+    focus::hide_window(&app); // the opened app takes focus; don't fight it
+    Ok(())
 }
 
 #[tauri::command]
