@@ -39,6 +39,10 @@ pub fn list_local(dir: &Path) -> Vec<Gif> {
     let mut found: Vec<(std::time::SystemTime, Gif)> = entries
         .flatten()
         .filter_map(|e| {
+            let metadata = e.metadata().ok()?;
+            if !metadata.is_file() {
+                return None;
+            }
             let path = e.path();
             let ext = path.extension()?.to_str()?.to_lowercase();
             if !EXTENSIONS.contains(&ext.as_str()) {
@@ -46,7 +50,7 @@ pub fn list_local(dir: &Path) -> Vec<Gif> {
             }
             let title = path.file_stem()?.to_str()?.to_string();
             let full = path.to_str()?.to_string();
-            let modified = e.metadata().ok()?.modified().ok()?;
+            let modified = metadata.modified().ok()?;
             Some((
                 modified,
                 Gif {
@@ -144,6 +148,7 @@ mod tests {
     fn list_local_keeps_images_and_skips_everything_else() {
         let dir = std::env::temp_dir().join(format!("gifs-test-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("subdir")).unwrap();
+        std::fs::create_dir_all(dir.join("trap.gif")).unwrap();
         for name in ["a.gif", "b.PNG", "c.webp", "notes.txt", "no-extension"] {
             std::fs::write(dir.join(name), b"x").unwrap();
         }
@@ -154,6 +159,30 @@ mod tests {
 
         assert_eq!(titles, vec!["a", "b", "c"]);
         assert!(got.iter().all(|g| g.source == Source::Local));
+        assert!(!titles.contains(&"trap".to_string()), "directory with .gif extension should be excluded");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn list_local_orders_newest_first_by_mtime() {
+        use std::thread;
+        use std::time::Duration;
+
+        let dir = std::env::temp_dir().join(format!("gifs-test-order-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Create files with distinct mtimes by creating them with delays.
+        // Each write has at least 10ms between, which guarantees different mtimes on most filesystems.
+        for name in ["a.gif", "b.gif", "c.gif"] {
+            std::fs::write(dir.join(name), b"x").unwrap();
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        let got = list_local(&dir);
+        let titles: Vec<_> = got.iter().map(|g| g.title.clone()).collect();
+
+        // Newest first means c (created last), b (middle), a (created first).
+        assert_eq!(titles, vec!["c", "b", "a"], "list_local should return files newest first by mtime");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
