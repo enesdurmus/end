@@ -1,5 +1,5 @@
 //! The GIF library: the folder on disk, and the shape a GIF takes on the way to
-//! the frontend. Favouriting a Tenor GIF downloads it here, so "my favourites"
+//! the frontend. Favouriting a remote GIF downloads it here, so "my favourites"
 //! and "my local GIFs" are the same folder — there is no separate store to keep
 //! in sync with the filesystem.
 
@@ -10,14 +10,14 @@ use std::path::{Path, PathBuf};
 #[serde(rename_all = "lowercase")]
 pub enum Source {
     Local,
-    Tenor,
+    Remote,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Gif {
     pub id: String,
     pub title: String,
-    /// What the row thumbnail renders: an https URL for Tenor, a file path for
+    /// What the row thumbnail renders: an https URL for a remote GIF, a file path for
     /// local entries (the frontend runs it through Tauri's asset protocol).
     pub preview: String,
     /// What gets copied: the full-size media URL, or the file path.
@@ -114,6 +114,118 @@ pub fn dir(app_dir: &Path, configured: &str) -> PathBuf {
     }
 }
 
+/// Shipped so the app works with no setup. A key inside a distributed binary is
+/// extractable — acceptable while this is not distributed, and `klipy_api_key`
+/// in preferences is the escape hatch. Distributing means deleting this const
+/// and requiring the preference.
+pub const KLIPY_KEY: &str = "REPLACE_WITH_YOUR_KLIPY_KEY";
+
+/// KLIPY puts the key in the path rather than a query parameter.
+const KLIPY_BASE: &str = "https://api.klipy.com/api/v1";
+
+#[derive(Deserialize)]
+struct KlipyResponse {
+    data: KlipyPage,
+}
+
+#[derive(Deserialize)]
+struct KlipyPage {
+    data: Vec<KlipyItem>,
+}
+
+#[derive(Deserialize)]
+struct KlipyItem {
+    id: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    files: std::collections::HashMap<String, String>,
+}
+
+/// Deliberately tolerant: the response shape is documented second-hand, so
+/// unknown fields are ignored and an item without usable media is dropped
+/// rather than turned into a row that cannot be pasted.
+fn parse_klipy(body: &str) -> Result<Vec<Gif>, String> {
+    let parsed: KlipyResponse = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    Ok(parsed
+        .data
+        .data
+        .into_iter()
+        .filter_map(|item| {
+            let full = item.files.get("original")?.clone();
+            let preview = item.files.get("preview").cloned().unwrap_or_else(|| full.clone());
+            Some(Gif {
+                id: item.id,
+                title: item.title,
+                preview,
+                url: full,
+                source: Source::Remote,
+            })
+        })
+        .collect())
+}
+
+pub async fn search_klipy(query: &str, key: &str) -> Result<Vec<Gif>, String> {
+    let key = if key.trim().is_empty() { KLIPY_KEY } else { key };
+    let res = reqwest::Client::new()
+        .get(format!("{KLIPY_BASE}/{key}/gifs/search"))
+        .query(&[("q", query), ("per_page", "24")])
+        .send()
+        .await
+        .map_err(|_| "klipy'ye ulaşılamadı".to_string())?;
+
+    if !res.status().is_success() {
+        // 401/403 is nearly always the key, and that is actionable by the user
+        return Err(match res.status().as_u16() {
+            401 | 403 => "klipy anahtarı geçersiz — Ayarlar'dan kontrol et".into(),
+            code => format!("klipy hatası ({code})"),
+        });
+    }
+
+    let body = res.text().await.map_err(|e| e.to_string())?;
+    parse_klipy(&body)
+}
+
+async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
+    let res = reqwest::get(url).await.map_err(|_| "indirilemedi".to_string())?;
+    if !res.status().is_success() {
+        return Err(format!("indirilemedi ({})", res.status().as_u16()));
+    }
+    Ok(res.bytes().await.map_err(|e| e.to_string())?.to_vec())
+}
+
+/// Downloads into the library and returns the entry as it now exists on disk, so
+/// the caller can show it as local without re-listing the folder.
+pub async fn download(dir: &Path, url: &str, title: &str) -> Result<Gif, String> {
+    let bytes = fetch_bytes(url).await?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+
+    let stem = unique_stem(&slug(title), |s| dir.join(format!("{s}.gif")).exists());
+    let path = dir.join(format!("{stem}.gif"));
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+
+    let full = path.to_string_lossy().to_string();
+    Ok(Gif {
+        id: full.clone(),
+        title: stem,
+        preview: full.clone(),
+        url: full,
+        source: Source::Local,
+    })
+}
+
+/// For pasting a remote GIF without keeping it. Named by the provider's id, so
+/// pasting the same GIF twice reuses the file instead of littering temp.
+pub async fn download_temp(id: &str, url: &str) -> Result<PathBuf, String> {
+    let path = std::env::temp_dir().join(format!("launcher-gif-{}.gif", slug(id)));
+    if path.exists() {
+        return Ok(path);
+    }
+    let bytes = fetch_bytes(url).await?;
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,5 +301,74 @@ mod tests {
     #[test]
     fn list_local_on_a_missing_folder_is_empty_not_an_error() {
         assert!(list_local(Path::new("/nonexistent/gif/folder")).is_empty());
+    }
+
+    #[test]
+    fn klipy_response_maps_to_gifs() {
+        let body = r#"{
+          "result": true,
+          "data": {
+            "data": [
+              {
+                "id": "gif_123",
+                "title": "Surprised Pikachu",
+                "files": {
+                  "original": "https://cdn.klipy.com/full.gif",
+                  "preview":  "https://cdn.klipy.com/tiny.gif"
+                }
+              },
+              {
+                "id": "gif_456",
+                "title": "No usable media",
+                "files": {}
+              }
+            ],
+            "current_page": 1,
+            "per_page": 24,
+            "has_next": true
+          }
+        }"#;
+
+        let got = parse_klipy(body).unwrap();
+
+        // the second result has no original file and is dropped rather than faked
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].id, "gif_123");
+        assert_eq!(got[0].title, "Surprised Pikachu");
+        assert_eq!(got[0].url, "https://cdn.klipy.com/full.gif");
+        assert_eq!(got[0].preview, "https://cdn.klipy.com/tiny.gif");
+        assert_eq!(got[0].source, Source::Remote);
+    }
+
+    #[test]
+    fn klipy_falls_back_to_the_full_gif_when_there_is_no_preview() {
+        let body = r#"{"result":true,"data":{"data":[
+          {"id":"1","title":"x","files":{"original":"https://cdn.klipy.com/full.gif"}}
+        ]}}"#;
+
+        let got = parse_klipy(body).unwrap();
+        assert_eq!(got[0].preview, "https://cdn.klipy.com/full.gif");
+    }
+
+    // the shape came from third-party docs, so unknown fields must never be fatal
+    #[test]
+    fn klipy_tolerates_unknown_fields() {
+        let body = r#"{"result":true,"extra":9,"data":{"data":[
+          {"id":"1","title":"x","surprise":true,
+           "files":{"original":"https://cdn.klipy.com/full.gif","hd":"https://x/hd.gif"}}
+        ],"unexpected":"field"}}"#;
+
+        assert_eq!(parse_klipy(body).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn klipy_empty_results_is_an_empty_list_not_an_error() {
+        let body = r#"{"result":true,"data":{"data":[],"current_page":1}}"#;
+        assert!(parse_klipy(body).unwrap().is_empty());
+    }
+
+    #[test]
+    fn klipy_garbage_is_an_error_not_a_panic() {
+        assert!(parse_klipy("not json").is_err());
     }
 }
