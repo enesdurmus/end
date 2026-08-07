@@ -159,6 +159,30 @@ pub fn set_translate_prefs(
 }
 
 #[tauri::command]
+pub fn set_gif_prefs(
+    klipy_api_key: Option<String>,
+    gif_dir: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let dir = app.path().app_config_dir().unwrap();
+    let mut prefs = preferences::load(&dir);
+    if let Some(k) = klipy_api_key {
+        prefs.klipy_api_key = k;
+    }
+    if let Some(d) = gif_dir {
+        prefs.gif_dir = d;
+        // the webview can only render thumbnails from a folder the asset
+        // protocol has been told about, and this one just changed
+        let resolved = gifs::dir(&dir, &prefs.gif_dir);
+        std::fs::create_dir_all(&resolved).map_err(|e| e.to_string())?;
+        app.asset_protocol_scope()
+            .allow_directory(&resolved, false)
+            .map_err(|e| e.to_string())?;
+    }
+    preferences::save(&dir, &prefs)
+}
+
+#[tauri::command]
 pub fn check_accessibility() -> bool {
     host().accessibility_granted()
 }

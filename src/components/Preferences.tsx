@@ -12,6 +12,8 @@ type Prefs = {
   history_limit: number;
   translate_target: string;
   translate_provider: string;
+  klipy_api_key: string;
+  gif_dir: string;
 };
 type Kind = "toggle" | "clipboard";
 
@@ -133,6 +135,35 @@ function TranslateRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Part
   );
 }
 
+function GifRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Prefs>) => void }) {
+  const [key, setKey] = useState(prefs.klipy_api_key);
+  const [dir, setDir] = useState(prefs.gif_dir);
+  const [error, setError] = useState("");
+
+  const commit = (next: Partial<Prefs>) => {
+    invoke("set_gif_prefs", {
+      klipyApiKey: next.klipy_api_key ?? null,
+      gifDir: next.gif_dir ?? null,
+    })
+      .then(() => { setError(""); onChanged(next); })
+      .catch((err) => setError(String(err)));
+  };
+
+  return (
+    <>
+      <Field label="KLIPY API Key">
+        <Input value={key} onChange={(e) => setKey(e.target.value)} onBlur={() => commit({ klipy_api_key: key })} />
+        <div className="text-fg/60 text-xs mt-1">Boş bırakırsan uygulamanın kendi anahtarı kullanılır.</div>
+      </Field>
+      <Field label="GIF Folder">
+        <Input value={dir} onChange={(e) => setDir(e.target.value)} onBlur={() => commit({ gif_dir: dir })} />
+        <div className="text-fg/60 text-xs mt-1">Boş bırakırsan varsayılan klasör kullanılır.</div>
+      </Field>
+      {error && <div className="text-danger text-xs mt-1">{error}</div>}
+    </>
+  );
+}
+
 export function Preferences() {
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [accessible, setAccessible] = useState<boolean | null>(null);
@@ -159,6 +190,8 @@ export function Preferences() {
         onChanged={(n) => setPrefs({ ...prefs, history_limit: n })} />
 
       <TranslateRows prefs={prefs} onChanged={(p) => setPrefs({ ...prefs, ...p })} />
+
+      <GifRows prefs={prefs} onChanged={(p) => setPrefs({ ...prefs, ...p })} />
 
       <div className="mt-5 pt-4 border-t border-hair">
         <div className="text-[13px] mb-2">

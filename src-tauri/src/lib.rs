@@ -82,7 +82,8 @@ pub fn run() {
             commands::gif_search,
             commands::paste_gif,
             commands::favorite_gif,
-            commands::open_gif_dir
+            commands::open_gif_dir,
+            commands::set_gif_prefs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
