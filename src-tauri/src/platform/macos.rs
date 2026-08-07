@@ -1,4 +1,7 @@
 use super::{AppEntry, Platform};
+use objc2::runtime::ProtocolObject;
+use objc2_app_kit::NSPasteboard;
+use objc2_foundation::{NSArray, NSString, NSURL};
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -101,6 +104,22 @@ impl Platform for MacOs {
 
     fn paste(&self, prev: Option<String>) {
         run(paste_script(prev.as_deref()));
+    }
+
+    fn copy_file(&self, path: &str) -> Result<(), String> {
+        let pb = NSPasteboard::generalPasteboard();
+        pb.clearContents();
+        let url = NSURL::fileURLWithPath(&NSString::from_str(path));
+        let obj = ProtocolObject::from_ref(&*url);
+        // The write is delivered asynchronously — true here does not mean the
+        // pasteboard is populated yet. Safe for us because the paste keystroke goes
+        // out through osascript, which first polls for the target app to come
+        // frontmost. Firing ⌘V synchronously after this would paste stale content.
+        if pb.writeObjects(&NSArray::from_slice(&[obj])) {
+            Ok(())
+        } else {
+            Err("clipboard rejected the file".into())
+        }
     }
 
     fn accessibility_granted(&self) -> bool {
@@ -225,7 +244,7 @@ fn run(script: String) {
 
 #[cfg(test)]
 mod tests {
-    use super::{activate_script, asns, paste_script};
+    use super::{activate_script, asns, paste_script, MacOs, Platform};
 
     #[test]
     fn asns_are_parsed_front_to_back() {
@@ -262,5 +281,23 @@ mod tests {
     #[test]
     fn pasting_without_a_target_still_types() {
         assert!(paste_script(None).contains("keystroke"));
+    }
+
+    // Ignored by default: it overwrites the real clipboard of whoever runs the
+    // suite. Run with `cargo test -- --ignored`.
+    #[test]
+    #[ignore]
+    fn copy_file_puts_a_file_url_on_the_pasteboard() {
+        use objc2_app_kit::NSPasteboard;
+        use objc2_foundation::NSString;
+
+        MacOs.copy_file("/tmp/launcher-copy-file-test.gif").unwrap();
+
+        let pb = NSPasteboard::generalPasteboard();
+        let got = pb.stringForType(&NSString::from_str("public.file-url"));
+        assert_eq!(
+            got.map(|s| s.to_string()).as_deref(),
+            Some("file:///tmp/launcher-copy-file-test.gif")
+        );
     }
 }

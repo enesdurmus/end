@@ -41,4 +41,8 @@ impl Platform for Linux {
     fn open_accessibility_settings(&self) -> Result<(), String> {
         Ok(())
     }
+
+    fn copy_file(&self, _path: &str) -> Result<(), String> {
+        Ok(()) // TODO: wl-copy --type text/uri-list, or xclip -selection clipboard -t text/uri-list
+    }
 }
