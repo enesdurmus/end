@@ -30,6 +30,14 @@ pub fn run() {
             let dir = app.path().app_config_dir().unwrap();
             let handle = app.handle();
 
+            // The gif folder is a preference, so its asset-protocol scope cannot
+            // live in tauri.conf.json. Granted here and re-granted by
+            // set_gif_prefs whenever the folder changes.
+            let prefs = preferences::load(&dir);
+            let gif_dir = gifs::dir(&dir, &prefs.gif_dir);
+            let _ = std::fs::create_dir_all(&gif_dir);
+            let _ = handle.asset_protocol_scope().allow_directory(&gif_dir, false);
+
             app.manage(focus::Focus::new(app.config().identifier.clone()));
             app.manage(shortcuts::register(handle, dir.clone())?);
             tray::build(handle)?;
@@ -69,7 +77,12 @@ pub fn run() {
             commands::set_translate_prefs,
             commands::translate_history,
             commands::record_translation,
-            commands::clear_translate_history
+            commands::clear_translate_history,
+            commands::gif_library,
+            commands::gif_search,
+            commands::paste_gif,
+            commands::favorite_gif,
+            commands::open_gif_dir
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
