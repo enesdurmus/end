@@ -214,6 +214,21 @@ pub async fn download(dir: &Path, url: &str, title: &str) -> Result<Gif, String>
     })
 }
 
+/// Writes `bytes` to `path` via a sibling temp file + rename, so a write that
+/// fails partway (disk full, permissions) never leaves a partial file sitting
+/// at `path` — `download_temp`'s existence check would otherwise treat that
+/// partial file as a finished download forever.
+fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let tmp = path.with_extension("part");
+    let result = std::fs::write(&tmp, bytes)
+        .and_then(|()| std::fs::rename(&tmp, path))
+        .map_err(|e| e.to_string());
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp); // best-effort; the error above is what matters
+    }
+    result
+}
+
 /// For pasting a remote GIF without keeping it. Named by the provider's id, so
 /// pasting the same GIF twice reuses the file instead of littering temp.
 pub async fn download_temp(id: &str, url: &str) -> Result<PathBuf, String> {
@@ -222,7 +237,7 @@ pub async fn download_temp(id: &str, url: &str) -> Result<PathBuf, String> {
         return Ok(path);
     }
     let bytes = fetch_bytes(url).await?;
-    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    write_atomically(&path, &bytes)?;
     Ok(path)
 }
 
@@ -370,5 +385,31 @@ mod tests {
     #[test]
     fn klipy_garbage_is_an_error_not_a_panic() {
         assert!(parse_klipy("not json").is_err());
+    }
+
+    // item 6: a write that fails partway must not leave a file at the final path
+    // for `download_temp`'s `path.exists()` check to mistake for a real download.
+    #[test]
+    fn write_atomically_leaves_no_partial_file_when_the_write_fails() {
+        let bad_dir = std::env::temp_dir().join(format!("gifs-test-missing-{}", std::process::id()));
+        let path = bad_dir.join("x.gif"); // bad_dir is never created, so the write fails
+
+        let err = write_atomically(&path, b"partial-bytes");
+
+        assert!(err.is_err());
+        assert!(!path.exists(), "a failed write must not leave a file behind");
+    }
+
+    #[test]
+    fn write_atomically_writes_the_final_file_on_success() {
+        let dir = std::env::temp_dir().join(format!("gifs-test-atomic-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("x.gif");
+
+        write_atomically(&path, b"hello").unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"hello");
+        assert!(!path.with_extension("part").exists(), "the temp file should not survive a successful write");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

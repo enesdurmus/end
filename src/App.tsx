@@ -43,7 +43,14 @@ export default function App() {
   const { clips, load: loadClips } = useClipboard(runActions);
   const { history, load: loadHistory, clear: clearHistory } = useTranslateHistory(runActions);
   const { entry, loading, error } = useTranslate(mode, query, source, target);
-  const { gifs: gifList, error: gifError, load: loadGifs } = useGifs(mode, query);
+  const {
+    gifs: gifList,
+    error: gifError,
+    actionError: gifActionError,
+    load: loadGifs,
+    favorite: favoriteGif,
+    pasteGif: pasteGifAction,
+  } = useGifs(mode, query, runActions.favorite, runActions.pasteGif);
 
   // Neither window is destroyed on close, so a mount-time-only read goes stale as
   // soon as the user changes "Translate To" in Preferences. Re-read on mount and on
@@ -76,14 +83,18 @@ export default function App() {
     () => (entry ? [translationToResult(entry, runActions)] : []),
     [entry]
   );
-  // Favouriting has to refresh the library, otherwise the row you just saved
-  // keeps calling itself `remote` until the mode is reopened.
+  // useGifs owns the library/remote state transition; here we just move the
+  // selection onto the new local row once it lands, so Enter right after
+  // ⌘Enter can't paste a gif other than the one just favourited.
   const gifActions = useMemo(
     () => ({
-      ...runActions,
-      favorite: async (g: Gif) => { await runActions.favorite(g); loadGifs(); },
+      pasteGif: pasteGifAction,
+      favorite: async (g: Gif) => {
+        const ok = await favoriteGif(g);
+        if (ok) dispatch({ type: "selectIndex", index: 0 });
+      },
     }),
-    [loadGifs]
+    [pasteGifAction, favoriteGif]
   );
   const gifResults = useMemo(
     () => gifList.map((g) => gifToResult(g, gifActions)),
@@ -126,8 +137,12 @@ export default function App() {
       : mode === "gif"
         ? {
             // KLIPY's terms are unread (their docs block automated fetches), so
-            // attribute by default — free API, courteous, costs nothing if required
-            left: gifError || (results.length ? "Powered by KLIPY" : ""),
+            // attribute by default — free API, courteous, costs nothing if required.
+            // Only when a KLIPY row is actually on screen: a local-only list has
+            // nothing to attribute. gifError is the search failing; gifActionError
+            // is Enter/⌘Enter failing on a result — either keeps the window open.
+            left: gifError || gifActionError ||
+              (gifList.some((g) => g.source === "remote") ? "Powered by KLIPY" : ""),
             hints: [["Paste", "↵"], ["Save", "⌘↵"], ["Folder", "⌘O"], ["Back", "esc"]],
           }
         : { left: `${results.length} results`, hints: [["Open", "↵"], ["Close", "esc"]] };

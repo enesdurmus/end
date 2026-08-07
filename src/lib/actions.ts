@@ -8,8 +8,9 @@ export type RunActions = {
   copy: (text: string) => Promise<void> | void;
   record: (entry: TranslationEntry) => Promise<void> | void;
   pasteGif: (gif: Gif) => Promise<void> | void;
-  favorite: (gif: Gif) => Promise<void> | void;
-  openGifDir: () => Promise<void> | void;
+  // Resolves to the new local Gif favorite_gif downloaded — useGifs needs it to
+  // replace the remote row it came from instead of re-listing the whole folder.
+  favorite: (gif: Gif) => Promise<Gif>;
 };
 
 // Hiding the window and handing focus back belongs to src-tauri/src/focus.rs; doing it
@@ -21,6 +22,5 @@ export const runActions: RunActions = {
   copy: (text) => invoke("write_clipboard", { text }),
   record: (entry) => invoke("record_translation", { entry }),
   pasteGif: (gif) => invoke("paste_gif", { gif }),
-  favorite: (gif) => invoke("favorite_gif", { gif }),
-  openGifDir: () => invoke("open_gif_dir"),
+  favorite: (gif) => invoke<Gif>("favorite_gif", { gif }),
 };

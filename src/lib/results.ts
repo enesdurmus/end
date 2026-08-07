@@ -85,9 +85,17 @@ export function translationToResult(e: TranslationEntry, actions: RunActions): R
   };
 }
 
+// Narrower than RunActions: App wires these to useGifs's error-swallowing
+// wrappers (which own the library/remote state transition and the action-error
+// channel), not to the raw invoke-backed RunActions.favorite/pasteGif.
+export type GifActions = {
+  pasteGif: (gif: Gif) => Promise<void> | void;
+  favorite: (gif: Gif) => Promise<void> | void;
+};
+
 // Enter pastes; ⌘Enter saves it to the library. A local gif is already saved, so
 // it gets no second action rather than a no-op one.
-export function gifToResult(g: Gif, actions: RunActions): Result {
+export function gifToResult(g: Gif, actions: GifActions): Result {
   return {
     id: "gif:" + g.id,
     type: "gif",

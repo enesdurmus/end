@@ -35,8 +35,15 @@ pub fn run() {
             // set_gif_prefs whenever the folder changes.
             let prefs = preferences::load(&dir);
             let gif_dir = gifs::dir(&dir, &prefs.gif_dir);
-            let _ = std::fs::create_dir_all(&gif_dir);
-            let _ = handle.asset_protocol_scope().allow_directory(&gif_dir, false);
+            // Setup can't show UI, so a failure here can only be logged — but it must
+            // be logged, since the visible symptom (blank thumbnails) gives no hint
+            // that the asset-scope grant is what actually failed.
+            if let Err(e) = std::fs::create_dir_all(&gif_dir) {
+                eprintln!("gif setup: create_dir_all({}) failed: {e}", gif_dir.display());
+            }
+            if let Err(e) = handle.asset_protocol_scope().allow_directory(&gif_dir, false) {
+                eprintln!("gif setup: allow_directory({}) failed: {e}", gif_dir.display());
+            }
 
             app.manage(focus::Focus::new(app.config().identifier.clone()));
             app.manage(shortcuts::register(handle, dir.clone())?);

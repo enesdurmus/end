@@ -93,3 +93,10 @@ test("leaving a mode clears the picker's stashed query", () => {
     query: "", savedQuery: "",
   });
 });
+
+// used after favouriting a gif, so the selection follows the new local row
+// rather than whatever now sits at the old index
+test("selectIndex sets the selection directly", () => {
+  const s: NavState = { ...initialNav, mode: "gif", selected: 3 };
+  expect(navReducer(s, { type: "selectIndex", index: 0 }).selected).toBe(0);
+});

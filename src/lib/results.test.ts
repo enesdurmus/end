@@ -6,7 +6,7 @@ import { Result, TranslationEntry, Gif } from "../types";
 
 const fakeActions = (): RunActions => ({
   paste: vi.fn(), open: vi.fn(), copy: vi.fn(), record: vi.fn(),
-  pasteGif: vi.fn(), favorite: vi.fn(), openGifDir: vi.fn(),
+  pasteGif: vi.fn(), favorite: vi.fn(),
 });
 
 test("appToResult maps fields and run() opens the path", () => {
@@ -133,10 +133,8 @@ const gifActions = () => {
   return {
     calls,
     a: {
-      paste: () => {}, open: () => {}, copy: () => {}, record: () => {},
       pasteGif: (g: Gif) => { calls.push("paste:" + g.id); },
       favorite: (g: Gif) => { calls.push("fav:" + g.id); },
-      openGifDir: () => { calls.push("dir"); },
     },
   };
 };
