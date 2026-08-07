@@ -1,6 +1,7 @@
 mod clipboard;
 mod commands;
 mod focus;
+mod gifs;
 mod platform;
 mod preferences;
 mod shortcuts;
