@@ -69,8 +69,9 @@ export function navReducer(s: NavState, a: NavAction): NavState {
       const from = s.source === "auto" ? a.detected : s.source;
       return { ...s, source: s.target, target: from, selected: 0 };
     }
-    // used after favouriting a gif: the new local row is prepended at index 0,
-    // so this keeps the selection on the same gif rather than an arbitrary one
+    // used after favouriting a gif: the caller resolves *where* the new local
+    // row landed (it may be re-sorted by the active query) before dispatching,
+    // so this only ever applies an already-resolved position
     case "selectIndex":
       return { ...s, selected: a.index };
   }

@@ -41,17 +41,19 @@ export function useGifs(mode: Mode, query: string, doFavorite: FavoriteFn, doPas
   // Replaces the favourited row with its local copy in place, rather than
   // re-listing the folder: a re-list refreshes `library` but leaves the stale
   // row sitting in `remote`, so the same gif ends up appearing twice. Resolves
-  // to whether it succeeded, so the caller can move the selection onto the new
-  // local row (index 0) without risking it landing on an unrelated gif.
+  // to the saved Gif on success (or false on failure) rather than a bare
+  // boolean: the query may re-sort the merged list by score, so the caller
+  // needs the new gif's id to find where it actually landed, not just whether
+  // the save worked.
   const favorite = useCallback((g: Gif) => {
     return doFavorite(g).then(
       (saved) => {
         setLibrary((prev) => [saved, ...prev]);
         setRemote((prev) => prev.filter((r) => r.id !== g.id));
         setActionError("");
-        return true;
+        return saved;
       },
-      (e) => { setActionError(String(e)); return false; }
+      (e) => { setActionError(String(e)); return false as const; }
     );
   }, [doFavorite]);
 

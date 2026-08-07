@@ -85,13 +85,17 @@ export default function App() {
   );
   // useGifs owns the library/remote state transition; here we just move the
   // selection onto the new local row once it lands, so Enter right after
-  // ⌘Enter can't paste a gif other than the one just favourited.
+  // ⌘Enter can't paste a gif other than the one just favourited. The query may
+  // re-sort the merged list by score (see fuzzyFilter), so "index 0" is not a
+  // safe assumption — remember the favourited gif's *id* instead, and resolve
+  // it to a position once gifResults reflects the save (see the effect below).
+  const pendingSelectId = useRef<string | null>(null);
   const gifActions = useMemo(
     () => ({
       pasteGif: pasteGifAction,
       favorite: async (g: Gif) => {
-        const ok = await favoriteGif(g);
-        if (ok) dispatch({ type: "selectIndex", index: 0 });
+        const saved = await favoriteGif(g);
+        if (saved) pendingSelectId.current = saved.id;
       },
     }),
     [pasteGifAction, favoriteGif]
@@ -100,6 +104,19 @@ export default function App() {
     () => gifList.map((g) => gifToResult(g, gifActions)),
     [gifList, gifActions]
   );
+  // Runs once per gifResults change (i.e. once the favourite's state update has
+  // landed). If the id isn't found yet — or ever, e.g. it got filtered out by a
+  // query change in flight — the selection is simply left alone rather than
+  // guessed at; selecting a *different* gif is the one unacceptable outcome.
+  useEffect(() => {
+    const id = pendingSelectId.current;
+    if (!id) return;
+    const idx = gifResults.findIndex((r) => r.id === "gif:" + id);
+    if (idx !== -1) {
+      dispatch({ type: "selectIndex", index: idx });
+      pendingSelectId.current = null;
+    }
+  }, [gifResults]);
   const results = useMemo(
     () =>
       buildResults(

@@ -64,13 +64,13 @@ test("favorite replaces the remote row with the returned local copy instead of d
   expect(ids).not.toContain("42");
 });
 
-test("favorite resolves true on success so the caller can move the selection", async () => {
+test("favorite resolves the saved gif on success so the caller can select it by id", async () => {
   const savedLocal: Gif = { ...local, id: "/g/new.gif" };
   const doFavorite = vi.fn().mockResolvedValue(savedLocal);
   const { result } = renderHook(() => useGifs("gif", "cat", doFavorite, noop));
-  let ok: boolean | undefined;
+  let ok: Gif | false | undefined;
   await act(async () => { ok = await result.current.favorite(remote); });
-  expect(ok).toBe(true);
+  expect(ok).toEqual(savedLocal);
 });
 
 // item 2: a failed action must surface an error instead of an unhandled rejection
@@ -80,7 +80,7 @@ test("a failed favorite sets actionError and does not touch the library", async 
   act(() => result.current.load());
   await waitFor(() => expect(result.current.gifs.length).toBe(2));
 
-  let ok: boolean | undefined;
+  let ok: Gif | false | undefined;
   await act(async () => { ok = await result.current.favorite(remote); });
 
   expect(ok).toBe(false);

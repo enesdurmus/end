@@ -118,7 +118,7 @@ pub fn dir(app_dir: &Path, configured: &str) -> PathBuf {
 /// extractable — acceptable while this is not distributed, and `klipy_api_key`
 /// in preferences is the escape hatch. Distributing means deleting this const
 /// and requiring the preference.
-pub const KLIPY_KEY: &str = "REPLACE_WITH_YOUR_KLIPY_KEY";
+pub const KLIPY_KEY: &str = "oLFOeHPRxnvuhMqzpliTykG5cG9VX2UzBcEyQKshp2AaAmk2pNu2FOGy3FyVlgGc";
 
 /// KLIPY puts the key in the path rather than a query parameter.
 const KLIPY_BASE: &str = "https://api.klipy.com/api/v1";
@@ -135,16 +135,42 @@ struct KlipyPage {
 
 #[derive(Deserialize)]
 struct KlipyItem {
-    id: String,
+    /// A JSON number on the wire, not a string — the real shape, confirmed against
+    /// a live response, differs from the third-party docs this was first built from.
+    id: i64,
     #[serde(default)]
     title: String,
     #[serde(default)]
-    files: std::collections::HashMap<String, String>,
+    file: std::collections::HashMap<String, std::collections::HashMap<String, KlipyMedia>>,
 }
 
-/// Deliberately tolerant: the response shape is documented second-hand, so
-/// unknown fields are ignored and an item without usable media is dropped
-/// rather than turned into a row that cannot be pasted.
+#[derive(Deserialize)]
+struct KlipyMedia {
+    url: String,
+}
+
+/// `size` ordered by preference, first `.gif` entry found under it wins.
+fn best_gif(
+    file: &std::collections::HashMap<String, std::collections::HashMap<String, KlipyMedia>>,
+    sizes: &[&str],
+) -> Option<String> {
+    sizes.iter().find_map(|size| file.get(*size)?.get("gif")).map(|m| m.url.clone())
+}
+
+#[derive(Deserialize)]
+struct KlipyError {
+    errors: KlipyErrorBody,
+}
+
+#[derive(Deserialize)]
+struct KlipyErrorBody {
+    message: Vec<String>,
+}
+
+/// Deliberately tolerant: `#[serde(default)]` on `file` and no `deny_unknown_fields`
+/// mean fields KLIPY adds later (or ones this struct doesn't model, like `slug`,
+/// `tags`, `type`, `blur_preview`) are ignored rather than fatal, and an item with
+/// no usable GIF is dropped rather than turned into a row that cannot be pasted.
 fn parse_klipy(body: &str) -> Result<Vec<Gif>, String> {
     let parsed: KlipyResponse = serde_json::from_str(body).map_err(|e| e.to_string())?;
     Ok(parsed
@@ -152,10 +178,15 @@ fn parse_klipy(body: &str) -> Result<Vec<Gif>, String> {
         .data
         .into_iter()
         .filter_map(|item| {
-            let full = item.files.get("original")?.clone();
-            let preview = item.files.get("preview").cloned().unwrap_or_else(|| full.clone());
+            // Full size (copied/pasted): md before hd. Measured on a real item, md is
+            // 640x640 at 1.2MB while hd is only 498x498 at 4.0MB — md is both bigger
+            // on screen and far cheaper to send, so it wins despite the name.
+            let full = best_gif(&item.file, &["md", "hd", "sm", "xs"])?;
+            // Preview (row thumbnail): sm is 220x220 at ~97KB, the smallest size that
+            // still looks right on a retina thumbnail row.
+            let preview = best_gif(&item.file, &["sm", "xs", "md", "hd"]).unwrap_or_else(|| full.clone());
             Some(Gif {
-                id: item.id,
+                id: item.id.to_string(),
                 title: item.title,
                 preview,
                 url: full,
@@ -175,10 +206,14 @@ pub async fn search_klipy(query: &str, key: &str) -> Result<Vec<Gif>, String> {
         .map_err(|_| "klipy'ye ulaşılamadı".to_string())?;
 
     if !res.status().is_success() {
-        // 401/403 is nearly always the key, and that is actionable by the user
-        return Err(match res.status().as_u16() {
-            401 | 403 => "klipy anahtarı geçersiz — Ayarlar'dan kontrol et".into(),
-            code => format!("klipy hatası ({code})"),
+        let code = res.status().as_u16();
+        let body = res.text().await.unwrap_or_default();
+        // KLIPY returns 404 (not 401/403) for a bad key, so there is no status code
+        // reliable enough to special-case — surface the provider's own message
+        // instead, and fall back to a generic one only if the body doesn't parse.
+        return Err(match serde_json::from_str::<KlipyError>(&body) {
+            Ok(e) if !e.errors.message.is_empty() => e.errors.message.join(" "),
+            _ => format!("klipy hatası ({code})"),
         });
     }
 
@@ -318,62 +353,57 @@ mod tests {
         assert!(list_local(Path::new("/nonexistent/gif/folder")).is_empty());
     }
 
+    // Real response for q=pikachu&per_page=2, captured against the live API — the
+    // parser must handle exactly this shape, not an invented approximation of it.
+    const KLIPY_SEARCH_FIXTURE: &str = include_str!("../tests/fixtures/klipy-search.json");
+    const KLIPY_BAD_KEY_FIXTURE: &str = include_str!("../tests/fixtures/klipy-bad-key.json");
+
     #[test]
     fn klipy_response_maps_to_gifs() {
-        let body = r#"{
-          "result": true,
-          "data": {
-            "data": [
-              {
-                "id": "gif_123",
-                "title": "Surprised Pikachu",
-                "files": {
-                  "original": "https://cdn.klipy.com/full.gif",
-                  "preview":  "https://cdn.klipy.com/tiny.gif"
-                }
-              },
-              {
-                "id": "gif_456",
-                "title": "No usable media",
-                "files": {}
-              }
-            ],
-            "current_page": 1,
-            "per_page": 24,
-            "has_next": true
-          }
-        }"#;
+        let got = parse_klipy(KLIPY_SEARCH_FIXTURE).unwrap();
 
-        let got = parse_klipy(body).unwrap();
-
-        // the second result has no original file and is dropped rather than faked
-        assert_eq!(got.len(), 1);
-        assert_eq!(got[0].id, "gif_123");
-        assert_eq!(got[0].title, "Surprised Pikachu");
-        assert_eq!(got[0].url, "https://cdn.klipy.com/full.gif");
-        assert_eq!(got[0].preview, "https://cdn.klipy.com/tiny.gif");
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].id, "2424550499023490");
+        assert_eq!(got[0].title, "Pikachu Shocked Face Stunned - Surprised Meme");
         assert_eq!(got[0].source, Source::Remote);
+
+        // md wins the full-size race: bigger on screen (640x640) and far smaller
+        // to send (1.2MB) than hd (498x498 at 4.0MB) on this fixture's real item.
+        assert_eq!(
+            got[0].url,
+            "https://static.klipy.com/ii/f87f46a2c5aeaeed4c68910815f73eaf/49/8e/pL5ZuAoY.gif"
+        );
+        // sm wins the preview race: smallest size that still holds up as a thumbnail.
+        assert_eq!(
+            got[0].preview,
+            "https://static.klipy.com/ii/f87f46a2c5aeaeed4c68910815f73eaf/49/8e/HbsWTaoP.gif"
+        );
     }
 
-    #[test]
-    fn klipy_falls_back_to_the_full_gif_when_there_is_no_preview() {
-        let body = r#"{"result":true,"data":{"data":[
-          {"id":"1","title":"x","files":{"original":"https://cdn.klipy.com/full.gif"}}
-        ]}}"#;
-
-        let got = parse_klipy(body).unwrap();
-        assert_eq!(got[0].preview, "https://cdn.klipy.com/full.gif");
-    }
-
-    // the shape came from third-party docs, so unknown fields must never be fatal
+    // the real shape came from third-party docs first, so fields this struct never
+    // modeled (slug, tags, type, blur_preview, and anything KLIPY adds later) must
+    // never be fatal
     #[test]
     fn klipy_tolerates_unknown_fields() {
-        let body = r#"{"result":true,"extra":9,"data":{"data":[
-          {"id":"1","title":"x","surprise":true,
-           "files":{"original":"https://cdn.klipy.com/full.gif","hd":"https://x/hd.gif"}}
-        ],"unexpected":"field"}}"#;
+        assert_eq!(parse_klipy(KLIPY_SEARCH_FIXTURE).unwrap().len(), 2);
+    }
 
-        assert_eq!(parse_klipy(body).unwrap().len(), 1);
+    #[test]
+    fn klipy_drops_items_with_no_usable_gif_rather_than_faking_one() {
+        let body = r#"{"result":true,"data":{"data":[
+          {"id":1,"title":"only webp","file":{"md":{"webp":{"url":"https://x/x.webp","width":1,"height":1,"size":1}}}}
+        ]}}"#;
+        assert!(parse_klipy(body).unwrap().is_empty());
+    }
+
+    #[test]
+    fn klipy_falls_back_to_a_worse_size_when_the_preferred_one_is_missing() {
+        let body = r#"{"result":true,"data":{"data":[
+          {"id":1,"title":"x","file":{"hd":{"gif":{"url":"https://x/hd.gif","width":1,"height":1,"size":1}}}}
+        ]}}"#;
+        let got = parse_klipy(body).unwrap();
+        assert_eq!(got[0].url, "https://x/hd.gif");
+        assert_eq!(got[0].preview, "https://x/hd.gif");
     }
 
     #[test]
@@ -385,6 +415,17 @@ mod tests {
     #[test]
     fn klipy_garbage_is_an_error_not_a_panic() {
         assert!(parse_klipy("not json").is_err());
+    }
+
+    // a bad key is a 404 on the real API, not 401/403 — the error path must not
+    // special-case a status code and must surface the provider's own message
+    #[test]
+    fn klipy_bad_key_body_surfaces_the_providers_own_message() {
+        let parsed: KlipyError = serde_json::from_str(KLIPY_BAD_KEY_FIXTURE).unwrap();
+        assert_eq!(
+            parsed.errors.message.join(" "),
+            "The provided API key is invalid: [BADKEY123]"
+        );
     }
 
     // item 6: a write that fails partway must not leave a file at the final path
