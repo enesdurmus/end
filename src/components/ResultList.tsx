@@ -9,6 +9,7 @@ const LABELS: Record<Result["type"], string> = {
   command: "Commands",
   language: "Languages",
   translation: "Translation History",
+  gif: "GIFs",
 };
 
 // ponytail: hue from title so icons look distinct without real app icons

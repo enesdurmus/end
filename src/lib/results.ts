@@ -1,4 +1,4 @@
-import { Result, TranslationEntry } from "../types";
+import { Gif, Result, TranslationEntry } from "../types";
 import { RunActions } from "./actions";
 import { fuzzyFilter } from "./fuzzy";
 import { Mode } from "./navigation";
@@ -85,6 +85,28 @@ export function translationToResult(e: TranslationEntry, actions: RunActions): R
   };
 }
 
+// Narrower than RunActions: App wires these to useGifs's error-swallowing
+// wrappers (which own the library/remote state transition and the action-error
+// channel), not to the raw invoke-backed RunActions.favorite/pasteGif.
+export type GifActions = {
+  pasteGif: (gif: Gif) => Promise<void> | void;
+  favorite: (gif: Gif) => Promise<void> | void;
+};
+
+// Enter pastes; ⌘Enter saves it to the library. A local gif is already saved, so
+// it gets no second action rather than a no-op one.
+export function gifToResult(g: Gif, actions: GifActions): Result {
+  return {
+    id: "gif:" + g.id,
+    type: "gif",
+    title: g.title,
+    subtitle: g.source,
+    icon: g.preview,
+    run: () => actions.pasteGif(g),
+    altRun: g.source === "remote" ? () => { actions.favorite(g); } : undefined,
+  };
+}
+
 export type ResultData = {
   commands: Result[];
   apps: Result[];
@@ -94,6 +116,7 @@ export type ResultData = {
   langs: Result[];
   translation: Result[]; // 0 or 1 entries — the live translation
   history: Result[];
+  gifs: Result[];
 };
 
 export function buildResults(mode: Mode, query: string, data: ResultData, picking: boolean): Result[] {
@@ -104,6 +127,7 @@ export function buildResults(mode: Mode, query: string, data: ResultData, pickin
     return query.trim() ? fuzzyFilter(query, data.clips, (r) => r.title) : data.clips;
   }
   if (mode === "files") return data.files;
+  if (mode === "gif") return data.gifs;
 
   const cmds = fuzzyFilter(query, data.commands, (r) => [r.title, ...(r.aliases ?? [])].join(" "));
   const base = fuzzyFilter(query, data.apps, (r) => r.title);

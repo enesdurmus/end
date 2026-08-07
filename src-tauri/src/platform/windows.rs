@@ -42,4 +42,8 @@ impl Platform for Windows {
     fn open_accessibility_settings(&self) -> Result<(), String> {
         Ok(())
     }
+
+    fn copy_file(&self, _path: &str) -> Result<(), String> {
+        Ok(()) // TODO: OleSetClipboard with a CF_HDROP drop-file descriptor
+    }
 }

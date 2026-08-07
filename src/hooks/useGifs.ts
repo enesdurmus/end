@@ -1,0 +1,77 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Gif } from "../types";
+import { Mode } from "../lib/navigation";
+import { fuzzyFilter } from "../lib/fuzzy";
+
+type FavoriteFn = (gif: Gif) => Promise<Gif>;
+type PasteFn = (gif: Gif) => Promise<void> | void;
+
+// ponytail: same shape as useTranslate — debounce + cancel flag, no request library
+export function useGifs(mode: Mode, query: string, doFavorite: FavoriteFn, doPaste: PasteFn) {
+  const [library, setLibrary] = useState<Gif[]>([]);
+  const [remote, setRemote] = useState<Gif[]>([]);
+  const [error, setError] = useState("");
+  // Separate from `error`: that one is "the search failed", this one is "the
+  // action on a result failed" (a 404 mid-paste, an unwritable library folder).
+  // Both render in the same status-bar slot, but they come from different places.
+  const [actionError, setActionError] = useState("");
+
+  const load = useCallback(() => {
+    invoke<Gif[]>("gif_library").then(setLibrary).catch(() => setLibrary([]));
+  }, []);
+
+  const text = mode === "gif" ? query.trim() : "";
+
+  useEffect(() => {
+    if (!text) { setRemote([]); setError(""); return; }
+    let cancelled = false;
+    // clear a stale error from the previous query up front, mirroring
+    // useTranslate — otherwise a resolved failure keeps showing while the
+    // next search is already loading.
+    setError("");
+    const t = setTimeout(() => {
+      invoke<Gif[]>("gif_search", { query: text })
+        .then((r) => { if (!cancelled) { setRemote(r); setError(""); } })
+        .catch((e) => { if (!cancelled) { setRemote([]); setError(String(e)); } });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [text]);
+
+  // Replaces the favourited row with its local copy in place, rather than
+  // re-listing the folder: a re-list refreshes `library` but leaves the stale
+  // row sitting in `remote`, so the same gif ends up appearing twice. Resolves
+  // to the saved Gif on success (or false on failure) rather than a bare
+  // boolean: the query may re-sort the merged list by score, so the caller
+  // needs the new gif's id to find where it actually landed, not just whether
+  // the save worked.
+  const favorite = useCallback((g: Gif) => {
+    return doFavorite(g).then(
+      (saved) => {
+        setLibrary((prev) => [saved, ...prev]);
+        setRemote((prev) => prev.filter((r) => r.id !== g.id));
+        setActionError("");
+        return saved;
+      },
+      (e) => { setActionError(String(e)); return false as const; }
+    );
+  }, [doFavorite]);
+
+  const pasteGif = useCallback((g: Gif) => {
+    return Promise.resolve(doPaste(g)).then(
+      () => setActionError(""),
+      (e) => { setActionError(String(e)); }
+    );
+  }, [doPaste]);
+
+  // Local first, deliberately: the library is small and hand-picked, so if
+  // something in it matched what you typed, it is what you meant.
+  // Memoised so identity is stable across renders that don't touch these
+  // inputs — App's pending-selection effect depends on this array.
+  const gifs = useMemo(() => {
+    const local = text ? fuzzyFilter(text, library, (g) => g.title) : library;
+    return [...local, ...remote];
+  }, [text, library, remote]);
+
+  return { gifs, error, actionError, load, favorite, pasteGif };
+}

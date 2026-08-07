@@ -34,6 +34,12 @@ export function useKeyboardNav({
         }
       }
 
+      if (mode === "gif" && e.metaKey && e.key === "o") {
+        e.preventDefault();
+        invoke("open_gif_dir");
+        return;
+      }
+
       if (e.key === "Escape") {
         if (picking) dispatch({ type: "cancelPick" });
         else if (mode === "root") invoke("close_launcher");

@@ -1,7 +1,7 @@
 // Pure state machine for the launcher UI. No DOM, no Tauri — fully testable.
 // Side effects (e.g. loading clipboard history) live in the caller, not here.
 
-export type Mode = "root" | "clipboard" | "files" | "translate";
+export type Mode = "root" | "clipboard" | "files" | "translate" | "gif";
 
 export type NavState = {
   mode: Mode;
@@ -25,7 +25,8 @@ export type NavAction =
   | { type: "pickLang" }
   | { type: "setTarget"; code: string }
   | { type: "cancelPick" }
-  | { type: "swap"; detected: string };
+  | { type: "swap"; detected: string }
+  | { type: "selectIndex"; index: number };
 
 export const initialNav: NavState = {
   mode: "root",
@@ -68,5 +69,10 @@ export function navReducer(s: NavState, a: NavAction): NavState {
       const from = s.source === "auto" ? a.detected : s.source;
       return { ...s, source: s.target, target: from, selected: 0 };
     }
+    // used after favouriting a gif: the caller resolves *where* the new local
+    // row landed (it may be re-sorted by the active query) before dispatching,
+    // so this only ever applies an already-resolved position
+    case "selectIndex":
+      return { ...s, selected: a.index };
   }
 }

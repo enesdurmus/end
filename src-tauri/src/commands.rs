@@ -8,6 +8,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
 use crate::clipboard;
 use crate::focus;
+use crate::gifs::{self, Gif};
 use crate::platform::{host, AppEntry, Platform};
 use crate::preferences;
 use crate::snippets;
@@ -158,6 +159,30 @@ pub fn set_translate_prefs(
 }
 
 #[tauri::command]
+pub fn set_gif_prefs(
+    klipy_api_key: Option<String>,
+    gif_dir: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let dir = app.path().app_config_dir().unwrap();
+    let mut prefs = preferences::load(&dir);
+    if let Some(k) = klipy_api_key {
+        prefs.klipy_api_key = k;
+    }
+    if let Some(d) = gif_dir {
+        prefs.gif_dir = d;
+        // the webview can only render thumbnails from a folder the asset
+        // protocol has been told about, and this one just changed
+        let resolved = gifs::dir(&dir, &prefs.gif_dir);
+        std::fs::create_dir_all(&resolved).map_err(|e| e.to_string())?;
+        app.asset_protocol_scope()
+            .allow_directory(&resolved, false)
+            .map_err(|e| e.to_string())?;
+    }
+    preferences::save(&dir, &prefs)
+}
+
+#[tauri::command]
 pub fn check_accessibility() -> bool {
     host().accessibility_granted()
 }
@@ -186,4 +211,50 @@ pub fn clear_translate_history(state: tauri::State<TranslateState>) -> Result<()
     list.clear();
     translate_history::save(&state.dir, &list);
     Ok(())
+}
+
+/// The library folder, resolved from preferences. Created on demand by the
+/// callers that write into it, not here — listing an absent folder is fine.
+fn gif_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
+    let dir = app.path().app_config_dir().unwrap();
+    let prefs = preferences::load(&dir);
+    gifs::dir(&dir, &prefs.gif_dir)
+}
+
+#[tauri::command]
+pub fn gif_library(app: tauri::AppHandle) -> Vec<Gif> {
+    gifs::list_local(&gif_dir(&app))
+}
+
+#[tauri::command]
+pub async fn gif_search(query: String, app: tauri::AppHandle) -> Result<Vec<Gif>, String> {
+    let dir = app.path().app_config_dir().unwrap();
+    let key = preferences::load(&dir).klipy_api_key;
+    gifs::search_klipy(&query, &key).await
+}
+
+#[tauri::command]
+pub async fn paste_gif(gif: Gif, app: tauri::AppHandle) -> Result<(), String> {
+    // a local gif is already a file; a remote one has to become one first
+    let path = match gif.source {
+        gifs::Source::Local => std::path::PathBuf::from(&gif.url),
+        gifs::Source::Remote => gifs::download_temp(&gif.id, &gif.url).await?,
+    };
+    host().copy_file(&path.to_string_lossy())?;
+    // hiding and the paste keystroke belong to focus.rs — the same reason
+    // paste_text goes through it, and the clipboard write is async besides
+    focus::hide_and_paste(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn favorite_gif(gif: Gif, app: tauri::AppHandle) -> Result<Gif, String> {
+    gifs::download(&gif_dir(&app), &gif.url, &gif.title).await
+}
+
+#[tauri::command]
+pub fn open_gif_dir(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = gif_dir(&app);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    host().open_path(&dir.to_string_lossy())
 }

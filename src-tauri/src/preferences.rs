@@ -25,6 +25,12 @@ pub struct Preferences {
     // Provider::default() == Google; #[serde(default)] keeps old files parsing
     #[serde(default)]
     pub translate_provider: Provider,
+    // empty means "use the key compiled into gifs.rs"
+    #[serde(default)]
+    pub klipy_api_key: String,
+    // empty means "<app_config_dir>/gifs"
+    #[serde(default)]
+    pub gif_dir: String,
 }
 
 impl Default for Preferences {
@@ -35,6 +41,8 @@ impl Default for Preferences {
             history_limit: DEFAULT_HISTORY_LIMIT,
             translate_target: default_translate_target(),
             translate_provider: Provider::default(),
+            klipy_api_key: String::new(),
+            gif_dir: String::new(),
         }
     }
 }
@@ -66,6 +74,15 @@ mod tests {
         let p: Preferences = serde_json::from_str(json).unwrap();
         assert_eq!(p.translate_target, "en");
         assert_eq!(p.translate_provider, crate::translate::Provider::Google);
+    }
+
+    #[test]
+    fn old_preferences_file_without_gif_fields_still_parses() {
+        // a preferences.json written before gif mode existed
+        let json = r#"{"toggle_shortcut":"Super+Space","clipboard_shortcut":"Super+Shift+KeyV","history_limit":200}"#;
+        let p: Preferences = serde_json::from_str(json).unwrap();
+        assert_eq!(p.klipy_api_key, "");
+        assert_eq!(p.gif_dir, "");
     }
 
     #[test]

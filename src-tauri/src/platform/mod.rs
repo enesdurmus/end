@@ -29,6 +29,11 @@ pub trait Platform: Send + Sync {
     /// Bring `prev` back to the front, then synthesize the paste keystroke.
     /// Clipboard contents are set by the caller beforehand.
     fn paste(&self, prev: Option<String>);
+    /// Puts a file reference on the system clipboard, the way copying a file in a
+    /// file manager does — so pasting into a chat or a mail composer attaches the
+    /// file itself. Distinct from the text clipboard `arboard` handles, which can
+    /// only carry decoded pixels and so drops a GIF's animation.
+    fn copy_file(&self, path: &str) -> Result<(), String>;
     /// Whether the OS has granted the input-synthesis / accessibility permission.
     fn accessibility_granted(&self) -> bool;
     /// Open the OS settings pane where the user grants that permission.
