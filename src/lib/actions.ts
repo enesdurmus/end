@@ -8,7 +8,7 @@ export type RunActions = {
   copy: (text: string) => Promise<void> | void;
   record: (entry: TranslationEntry) => Promise<void> | void;
   pasteGif: (gif: Gif) => Promise<void> | void;
-  favorite: (gif: Gif) => Promise<Gif> | void;
+  favorite: (gif: Gif) => Promise<void> | void;
   openGifDir: () => Promise<void> | void;
 };
 

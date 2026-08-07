@@ -4,12 +4,13 @@ import { SearchBar } from "./components/SearchBar";
 import { ResultList } from "./components/ResultList";
 import { ClipboardView } from "./components/ClipboardView";
 import { TranslateView } from "./components/TranslateView";
+import { GifList } from "./components/GifList";
 import { StatusBar } from "./components/StatusBar";
 import { SnippetManager } from "./components/SnippetManager";
 import { Window } from "./components/ui/Window";
 import { buildCommands } from "./commands";
 import { runActions } from "./lib/actions";
-import { buildResults, langToResult, translationToResult } from "./lib/results";
+import { buildResults, langToResult, translationToResult, gifToResult } from "./lib/results";
 import { LANGUAGES, languageName } from "./lib/languages";
 import { navReducer, initialNav } from "./lib/navigation";
 import { useApps } from "./hooks/useApps";
@@ -18,13 +19,16 @@ import { useSnippets } from "./hooks/useSnippets";
 import { useFileSearch } from "./hooks/useFileSearch";
 import { useTranslate } from "./hooks/useTranslate";
 import { useTranslateHistory } from "./hooks/useTranslateHistory";
+import { useGifs } from "./hooks/useGifs";
 import { useLauncherEvents } from "./hooks/useLauncherEvents";
 import { useKeyboardNav } from "./hooks/useKeyboardNav";
+import { Gif } from "./types";
 
 const PLACEHOLDER = {
   clipboard: "Search clipboard history...",
   files: "Search files...",
   translate: "Type to translate...",
+  gif: "Search GIFs...",
   root: "Search...",
 } as const;
 
@@ -39,6 +43,7 @@ export default function App() {
   const { clips, load: loadClips } = useClipboard(runActions);
   const { history, load: loadHistory, clear: clearHistory } = useTranslateHistory(runActions);
   const { entry, loading, error } = useTranslate(mode, query, source, target);
+  const { gifs: gifList, error: gifError, load: loadGifs } = useGifs(mode, query);
 
   // Neither window is destroyed on close, so a mount-time-only read goes stale as
   // soon as the user changes "Translate To" in Preferences. Re-read on mount and on
@@ -63,17 +68,36 @@ export default function App() {
   }, []);
 
   const commands = useMemo(
-    () => buildCommands(dispatch, loadClips, enterTranslate),
-    [loadClips, enterTranslate]
+    () => buildCommands(dispatch, loadClips, enterTranslate, loadGifs),
+    [loadClips, enterTranslate, loadGifs]
   );
   const langs = useMemo(() => LANGUAGES.map((l) => langToResult(l, pickTarget)), [pickTarget]);
   const translation = useMemo(
     () => (entry ? [translationToResult(entry, runActions)] : []),
     [entry]
   );
+  // Favouriting has to refresh the library, otherwise the row you just saved
+  // keeps calling itself `remote` until the mode is reopened.
+  const gifActions = useMemo(
+    () => ({
+      ...runActions,
+      favorite: async (g: Gif) => { await runActions.favorite(g); loadGifs(); },
+    }),
+    [loadGifs]
+  );
+  const gifResults = useMemo(
+    () => gifList.map((g) => gifToResult(g, gifActions)),
+    [gifList, gifActions]
+  );
   const results = useMemo(
-    () => buildResults(mode, query, { commands, apps, snips, clips, files, langs, translation, history }, picking),
-    [mode, query, picking, commands, apps, snips, clips, files, langs, translation, history]
+    () =>
+      buildResults(
+        mode,
+        query,
+        { commands, apps, snips, clips, files, langs, translation, history, gifs: gifResults },
+        picking
+      ),
+    [mode, query, picking, commands, apps, snips, clips, files, langs, translation, history, gifResults]
   );
 
   useLauncherEvents(dispatch, loadClips);
@@ -99,7 +123,14 @@ export default function App() {
             ? [["Copy", "↵"], ["Paste", "⌘↵"], ["Lang", "⌘P"], ["Swap", "⌘S"]]
             : [["Copy", "↵"], ["Paste", "⌘↵"], ["Lang", "⌘P"], ["Clear", "⌘⌫"]],
         }
-      : { left: `${results.length} results`, hints: [["Open", "↵"], ["Close", "esc"]] };
+      : mode === "gif"
+        ? {
+            // KLIPY's terms are unread (their docs block automated fetches), so
+            // attribute by default — free API, courteous, costs nothing if required
+            left: gifError || (results.length ? "Powered by KLIPY" : ""),
+            hints: [["Paste", "↵"], ["Save", "⌘↵"], ["Folder", "⌘O"], ["Back", "esc"]],
+          }
+        : { left: `${results.length} results`, hints: [["Open", "↵"], ["Close", "esc"]] };
 
   return (
     <Window variant="floating">
@@ -111,6 +142,7 @@ export default function App() {
             : mode === "clipboard" ? "Clipboard History"
             : mode === "files" ? "Search Files"
             : mode === "translate" ? "Translate"
+            : mode === "gif" ? "GIFs"
             : undefined
         }
         placeholder={picking ? "Search languages..." : PLACEHOLDER[mode]}
@@ -122,6 +154,8 @@ export default function App() {
         <TranslateView entry={entry} loading={loading} error={error} />
       ) : mode === "clipboard" || mode === "translate" ? (
         <ClipboardView results={results} selected={selected} />
+      ) : mode === "gif" ? (
+        <GifList results={results} selected={selected} />
       ) : (
         <ResultList results={results} selected={selected} />
       )}
