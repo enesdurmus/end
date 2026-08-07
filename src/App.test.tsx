@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import App from "./App";
 import { Gif } from "./types";
 
@@ -32,7 +32,7 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function getInput(): HTMLInputElement {
   return document.querySelector("input") as HTMLInputElement;
@@ -69,4 +69,63 @@ test("favouriting selects the gif that was favourited even when it re-sorts behi
     const selected = rows.find((row) => row.className.split(/\s+/).includes("bg-sel"));
     expect(selected?.textContent).toContain("banned gif");
   });
+});
+
+// `selected` is a single index shared by every mode (see navigation.ts). If the
+// pending-selection effect in App.tsx fires after the user has already left gif
+// mode, it dispatches selectIndex against whatever list is showing now — moving
+// the cursor onto an app/command the user never picked. Must not happen.
+test("leaving gif mode before the favourite resolves does not move the selection in the new mode", async () => {
+  // hold the favorite_gif response open so the pending id is still unresolved
+  // when the mode switch happens
+  let resolveFavorite!: (g: Gif) => void;
+  invoke.mockImplementation((cmd: string) => {
+    switch (cmd) {
+      case "get_preferences": return Promise.resolve({ translate_target: "en" });
+      case "list_apps": return Promise.resolve([]);
+      case "list_snippets": return Promise.resolve([]);
+      case "gif_library": return Promise.resolve([bandLocal]);
+      case "gif_search": return Promise.resolve([bannedRemote]);
+      case "favorite_gif": return new Promise<Gif>((res) => { resolveFavorite = res; });
+      default: return Promise.resolve(undefined);
+    }
+  });
+
+  render(<App />);
+
+  fireEvent.change(getInput(), { target: { value: "gif" } });
+  await waitFor(() => expect(screen.queryByText("Search GIFs")).not.toBeNull());
+  fireEvent.keyDown(window, { key: "Enter" });
+  await waitFor(() => expect(invoke).toHaveBeenCalledWith("gif_library"));
+
+  fireEvent.change(getInput(), { target: { value: "band" } });
+  await waitFor(() => expect(screen.queryByText("banned gif")).not.toBeNull(), { timeout: 2000 });
+
+  fireEvent.keyDown(window, { key: "ArrowDown" });
+  fireEvent.keyDown(window, { key: "Enter", metaKey: true });
+  await waitFor(() => expect(invoke).toHaveBeenCalledWith("favorite_gif", { gif: bannedRemote }));
+
+  // leave gif mode before the favorite promise resolves — the pending id is
+  // still armed at this point
+  fireEvent.keyDown(window, { key: "Escape" });
+  await waitFor(() => expect(getInput().value).toBe(""));
+
+  // move off index 0 so a leaked selectIndex:0 (the saved gif's post-resolve
+  // position) wouldn't be masked by already sitting there
+  fireEvent.keyDown(window, { key: "ArrowDown" });
+  const selectedBefore = document.querySelector("li > div.bg-sel")?.textContent;
+
+  // now let the stale favorite resolve; the gif list state update it triggers
+  // is exactly what used to fire the leaked selectIndex dispatch. Draining a
+  // few extra microtask turns inside act() is needed because the chain runs
+  // through two chained promises (useGifs' internal .then, then the awaited
+  // gifActions.favorite wrapper in App) before the ref is set and a render
+  // with the new gifResults reference lets the effect see it.
+  await act(async () => {
+    resolveFavorite(bannedSavedLocal);
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  });
+
+  const selectedAfter = document.querySelector("li > div.bg-sel")?.textContent;
+  expect(selectedAfter).toBe(selectedBefore);
 });

@@ -108,7 +108,11 @@ export default function App() {
   // landed). If the id isn't found yet — or ever, e.g. it got filtered out by a
   // query change in flight — the selection is simply left alone rather than
   // guessed at; selecting a *different* gif is the one unacceptable outcome.
+  // `selected` is shared across every mode (see navigation.ts), so this must
+  // never fire once the user has left gif mode — otherwise a pending id that
+  // resolves late moves the cursor in whatever list is now showing.
   useEffect(() => {
+    if (mode !== "gif") { pendingSelectId.current = null; return; }
     const id = pendingSelectId.current;
     if (!id) return;
     const idx = gifResults.findIndex((r) => r.id === "gif:" + id);
@@ -116,7 +120,7 @@ export default function App() {
       dispatch({ type: "selectIndex", index: idx });
       pendingSelectId.current = null;
     }
-  }, [gifResults]);
+  }, [mode, gifResults]);
   const results = useMemo(
     () =>
       buildResults(

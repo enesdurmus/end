@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Gif } from "../types";
 import { Mode } from "../lib/navigation";
@@ -66,8 +66,12 @@ export function useGifs(mode: Mode, query: string, doFavorite: FavoriteFn, doPas
 
   // Local first, deliberately: the library is small and hand-picked, so if
   // something in it matched what you typed, it is what you meant.
-  const local = text ? fuzzyFilter(text, library, (g) => g.title) : library;
-  const gifs = [...local, ...remote];
+  // Memoised so identity is stable across renders that don't touch these
+  // inputs — App's pending-selection effect depends on this array.
+  const gifs = useMemo(() => {
+    const local = text ? fuzzyFilter(text, library, (g) => g.title) : library;
+    return [...local, ...remote];
+  }, [text, library, remote]);
 
   return { gifs, error, actionError, load, favorite, pasteGif };
 }
