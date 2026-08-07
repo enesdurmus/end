@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { TranslationEntry } from "../types";
+import { Gif, TranslationEntry } from "../types";
 
 // Injected into result mappers so those stay pure/testable.
 export type RunActions = {
@@ -7,6 +7,9 @@ export type RunActions = {
   open: (path: string) => Promise<void> | void;
   copy: (text: string) => Promise<void> | void;
   record: (entry: TranslationEntry) => Promise<void> | void;
+  pasteGif: (gif: Gif) => Promise<void> | void;
+  favorite: (gif: Gif) => Promise<Gif> | void;
+  openGifDir: () => Promise<void> | void;
 };
 
 // Hiding the window and handing focus back belongs to src-tauri/src/focus.rs; doing it
@@ -17,4 +20,7 @@ export const runActions: RunActions = {
   open: (path) => invoke("open_path", { path }),
   copy: (text) => invoke("write_clipboard", { text }),
   record: (entry) => invoke("record_translation", { entry }),
+  pasteGif: (gif) => invoke("paste_gif", { gif }),
+  favorite: (gif) => invoke("favorite_gif", { gif }),
+  openGifDir: () => invoke("open_gif_dir"),
 };

@@ -1,10 +1,13 @@
 import { expect, test, vi } from "vitest";
 import { appToResult, clipToResult, snipToResult, fileToResult, buildResults,
-         historyToResult, translationToResult, langToResult } from "./results";
+         historyToResult, translationToResult, langToResult, gifToResult } from "./results";
 import { RunActions } from "./actions";
-import { Result, TranslationEntry } from "../types";
+import { Result, TranslationEntry, Gif } from "../types";
 
-const fakeActions = (): RunActions => ({ paste: vi.fn(), open: vi.fn(), copy: vi.fn(), record: vi.fn() });
+const fakeActions = (): RunActions => ({
+  paste: vi.fn(), open: vi.fn(), copy: vi.fn(), record: vi.fn(),
+  pasteGif: vi.fn(), favorite: vi.fn(), openGifDir: vi.fn(),
+});
 
 test("appToResult maps fields and run() opens the path", () => {
   const a = fakeActions();
@@ -39,7 +42,7 @@ const r = (title: string, extra: Partial<Result> = {}): Result =>
 
 const entry: TranslationEntry = { source: "merhaba", translated: "hello", from: "tr", to: "en" };
 
-const emptyData = { commands: [], apps: [], snips: [], clips: [], files: [], langs: [], translation: [], history: [] };
+const emptyData = { commands: [], apps: [], snips: [], clips: [], files: [], langs: [], translation: [], history: [], gifs: [] };
 
 test("buildResults clipboard mode: no query returns clips as-is, query fuzzy-filters", () => {
   const clips = [r("apple"), r("banana")];
@@ -114,4 +117,64 @@ test("buildResults shows history on a blank translate query", () => {
 test("buildResults shows the live translation once the user types", () => {
   const translation = [translationToResult(entry, fakeActions())];
   expect(buildResults("translate", "merhaba", { ...emptyData, translation, history: [] }, false)).toEqual(translation);
+});
+
+const local: Gif = {
+  id: "/gifs/cat.gif", title: "cat",
+  preview: "/gifs/cat.gif", url: "/gifs/cat.gif", source: "local",
+};
+const remote: Gif = {
+  id: "42", title: "Surprised Pikachu",
+  preview: "https://t/tiny.gif", url: "https://t/full.gif", source: "remote",
+};
+
+const gifActions = () => {
+  const calls: string[] = [];
+  return {
+    calls,
+    a: {
+      paste: () => {}, open: () => {}, copy: () => {}, record: () => {},
+      pasteGif: (g: Gif) => { calls.push("paste:" + g.id); },
+      favorite: (g: Gif) => { calls.push("fav:" + g.id); },
+      openGifDir: () => { calls.push("dir"); },
+    },
+  };
+};
+
+test("a local gif pastes on Enter and is labelled as local", () => {
+  const { calls, a } = gifActions();
+  const r = gifToResult(local, a);
+  expect(r.subtitle).toBe("local");
+  r.run();
+  expect(calls).toEqual(["paste:/gifs/cat.gif"]);
+});
+
+test("a remote gif favourites on ⌘Enter", () => {
+  const { calls, a } = gifActions();
+  const r = gifToResult(remote, a);
+  expect(r.subtitle).toBe("remote");
+  r.altRun!();
+  expect(calls).toEqual(["fav:42"]);
+});
+
+// a local gif is already saved, so the second action must not re-download it
+test("a local gif has no favourite action", () => {
+  const { a } = gifActions();
+  expect(gifToResult(local, a).altRun).toBeUndefined();
+});
+
+test("gif mode shows local results before remote results", () => {
+  const { a } = gifActions();
+  const rows = buildResults(
+    "gif",
+    "cat",
+    {
+      commands: [], apps: [], snips: [], clips: [], files: [],
+      langs: [], translation: [], history: [],
+      gifs: [gifToResult(remote, a), gifToResult(local, a)],
+    },
+    false
+  );
+  // buildResults must not reorder — useGifs already merged local-first
+  expect(rows.map((r) => r.id)).toEqual(["gif:42", "gif:/gifs/cat.gif"]);
 });

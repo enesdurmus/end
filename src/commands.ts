@@ -5,7 +5,8 @@ import { NavAction } from "./lib/navigation";
 export function buildCommands(
   dispatch: Dispatch<NavAction>,
   loadClips: () => void,
-  loadHistory: () => void
+  loadHistory: () => void,
+  loadGifs: () => void
 ): Result[] {
   return [
     {
@@ -28,6 +29,12 @@ export function buildCommands(
       id: "cmd:snippets", type: "command", title: "Manage Snippets",
       subtitle: "Create and edit snippets", aliases: ["snippets"],
       run: () => dispatch({ type: "manage" }),
+    },
+    {
+      id: "cmd:gif", type: "command", title: "Search GIFs",
+      subtitle: "Find a GIF and paste it into the app you were in",
+      aliases: ["gif", "gifs", "meme"],
+      run: () => { dispatch({ type: "goMode", mode: "gif" }); loadGifs(); },
     },
   ];
 }

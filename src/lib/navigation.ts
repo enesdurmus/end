@@ -1,7 +1,7 @@
 // Pure state machine for the launcher UI. No DOM, no Tauri — fully testable.
 // Side effects (e.g. loading clipboard history) live in the caller, not here.
 
-export type Mode = "root" | "clipboard" | "files" | "translate";
+export type Mode = "root" | "clipboard" | "files" | "translate" | "gif";
 
 export type NavState = {
   mode: Mode;
