@@ -26,8 +26,10 @@ pub trait Platform: Send + Sync {
     fn app_behind(&self, own: &str) -> Option<String>;
     /// Bring `prev` (if any) back to the front.
     fn restore_focus(&self, prev: Option<String>);
-    /// Bring `prev` back to the front, then synthesize the paste keystroke.
+    /// Make `prev` paste, and bring it back to the front. Neither waits on the other.
     /// Clipboard contents are set by the caller beforehand.
+    ///
+    /// Called on the main thread, before the launcher's window is hidden.
     fn paste(&self, prev: Option<String>);
     /// Puts a file reference on the system clipboard, the way copying a file in a
     /// file manager does — so pasting into a chat or a mail composer attaches the

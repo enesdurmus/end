@@ -40,14 +40,27 @@ pub fn show<R: Runtime>(app: &AppHandle<R>) {
 }
 
 pub fn hide<R: Runtime>(app: &AppHandle<R>) {
-    hide_window(app);
-    host().restore_focus(app.state::<Focus>().prev());
+    let prev = app.state::<Focus>().prev();
+    on_main(app, move |app| {
+        host().restore_focus(prev);
+        hide_window(app);
+    });
 }
 
 /// Clipboard contents are the caller's job.
 pub fn hide_and_paste<R: Runtime>(app: &AppHandle<R>) {
-    hide_window(app);
-    host().paste(app.state::<Focus>().prev());
+    let prev = app.state::<Focus>().prev();
+    on_main(app, move |app| {
+        host().paste(prev);
+        hide_window(app);
+    });
+}
+
+/// Main thread, hiding last: commands arrive on a worker, and hiding our only window is
+/// what makes us stop being the active app.
+fn on_main<R: Runtime>(app: &AppHandle<R>, f: impl FnOnce(&AppHandle<R>) + Send + 'static) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || f(&handle));
 }
 
 /// Dismiss without restoring, for actions that hand focus elsewhere themselves.
