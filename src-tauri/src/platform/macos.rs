@@ -1,8 +1,11 @@
 use super::{AppEntry, Platform};
+use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
-use objc2_app_kit::NSPasteboard;
-use objc2_foundation::{NSArray, NSString, NSURL};
+use objc2_app_kit::{NSApplicationActivationOptions, NSPasteboard, NSRunningApplication};
+use objc2_core_graphics::{CGEvent, CGEventFlags, CGKeyCode};
+use objc2_foundation::{NSArray, NSString, NSThread, NSURL};
 use std::collections::hash_map::DefaultHasher;
+use std::ffi::{c_int, c_ulong, c_void};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::io::{BufRead, BufReader};
@@ -97,13 +100,20 @@ impl Platform for MacOs {
     }
 
     fn restore_focus(&self, prev: Option<String>) {
-        if let Some(id) = prev {
-            run(activate_script(&id));
+        if let Some(app) = prev.as_deref().and_then(running) {
+            request_activation_of(&app);
         }
     }
 
     fn paste(&self, prev: Option<String>) {
-        run(paste_script(prev.as_deref()));
+        let Some(app) = prev.as_deref().and_then(running) else {
+            return;
+        };
+        let pid = app.processIdentifier();
+        request_activation_of(&app);
+        if pid != NO_PID {
+            send_paste(pid, paste_key());
+        }
     }
 
     fn copy_file(&self, path: &str) -> Result<(), String> {
@@ -111,10 +121,6 @@ impl Platform for MacOs {
         pb.clearContents();
         let url = NSURL::fileURLWithPath(&NSString::from_str(path));
         let obj = ProtocolObject::from_ref(&*url);
-        // The write is delivered asynchronously — true here does not mean the
-        // pasteboard is populated yet. Safe for us because the paste keystroke goes
-        // out through osascript, which first polls for the target app to come
-        // frontmost. Firing ⌘V synchronously after this would paste stale content.
         if pb.writeObjects(&NSArray::from_slice(&[obj])) {
             Ok(())
         } else {
@@ -213,38 +219,108 @@ fn bundle_id(asn: &str) -> Option<String> {
     Some(id).filter(|id| !id.is_empty())
 }
 
-const KEYSTROKE: &str = "\ntell application \"System Events\" to keystroke \"v\" using command down";
+const PASTE_CHAR: u16 = b'v' as u16;
+const ANSI_PASTE_KEY: CGKeyCode = 9; // kVK_ANSI_V
+const NO_PID: c_int = -1;
 
-/// ponytail: activation is async on macOS, so this polls (bounded) rather than gambling
-/// on a fixed delay — otherwise a following keystroke lands in the launcher and the
-/// paste silently becomes a copy.
-fn activate_script(id: &str) -> String {
-    format!(
-        "tell application id \"{id}\" to activate\n\
-         repeat 25 times\n\
-           tell application \"System Events\" to if (bundle identifier of first application process whose frontmost is true) is \"{id}\" then exit repeat\n\
-           delay 0.02\n\
-         end repeat"
-    )
+/// Main thread only: HIToolbox traps the process anywhere else, and only inside a real
+/// NSApplication — no test can reach it.
+fn paste_key() -> CGKeyCode {
+    debug_assert!(NSThread::isMainThread_class(), "paste_key touches HIToolbox; main thread only");
+    paste_key_in_current_layout().unwrap_or(ANSI_PASTE_KEY)
 }
 
-fn paste_script(prev: Option<&str>) -> String {
-    match prev {
-        Some(id) => activate_script(id) + KEYSTROKE,
-        // No target: lean on macOS's own focus restoration, the best available guess
-        None => format!("delay 0.15{KEYSTROKE}"),
+/// A CGEvent carries a key position, and `v` moves with the layout (Dvorak, Turkish-F).
+fn paste_key_in_current_layout() -> Option<CGKeyCode> {
+    unsafe {
+        let src = TISCopyCurrentKeyboardLayoutInputSource();
+        if src.is_null() {
+            return None;
+        }
+        let data = TISGetInputSourceProperty(src, kTISPropertyUnicodeKeyLayoutData);
+        let layout = if data.is_null() { std::ptr::null() } else { CFDataGetBytePtr(data) };
+        // `layout` is owned by `src`.
+        let found = (!layout.is_null())
+            .then(|| (0..128).find(|&code| types_paste_char(layout, code)))
+            .flatten();
+        CFRelease(src);
+        found
     }
 }
 
-fn run(script: String) {
-    std::thread::spawn(move || {
-        let _ = Command::new("osascript").args(["-e", &script]).output();
-    });
+unsafe fn types_paste_char(layout: *const u8, code: CGKeyCode) -> bool {
+    const ACTION_DISPLAY: u16 = 3; // kUCKeyActionDisplay
+    const NO_DEAD_KEYS: u32 = 1; // 1 << kUCKeyTranslateNoDeadKeysBit
+    let mut dead = 0u32;
+    let mut len: c_ulong = 0;
+    let mut buf = [0u16; 4];
+    let status = UCKeyTranslate(
+        layout,
+        code,
+        ACTION_DISPLAY,
+        0,
+        LMGetKbdType() as u32,
+        NO_DEAD_KEYS,
+        &mut dead,
+        buf.len() as c_ulong,
+        &mut len,
+        buf.as_mut_ptr(),
+    );
+    status == 0 && len == 1 && buf[0] == PASTE_CHAR
+}
+
+#[link(name = "Carbon", kind = "framework")]
+extern "C" {
+    fn TISCopyCurrentKeyboardLayoutInputSource() -> *mut c_void;
+    fn TISGetInputSourceProperty(source: *mut c_void, key: *const c_void) -> *mut c_void;
+    static kTISPropertyUnicodeKeyLayoutData: *const c_void;
+    fn LMGetKbdType() -> u8;
+    #[allow(clippy::too_many_arguments)]
+    fn UCKeyTranslate(
+        key_layout: *const u8,
+        virtual_key_code: u16,
+        key_action: u16,
+        modifier_key_state: u32,
+        keyboard_type: u32,
+        options: u32,
+        dead_key_state: *mut u32,
+        max_string_length: c_ulong,
+        actual_string_length: *mut c_ulong,
+        unicode_string: *mut u16,
+    ) -> i32;
+}
+
+#[link(name = "CoreFoundation", kind = "framework")]
+extern "C" {
+    fn CFDataGetBytePtr(data: *mut c_void) -> *const u8;
+    fn CFRelease(cf: *mut c_void);
+}
+
+/// Only counts while the launcher is still the active app: macOS parks a request from a
+/// background process in LaunchServices for a full second.
+fn request_activation_of(app: &NSRunningApplication) {
+    #[allow(deprecated)] // `activate()` alone is macOS 14+; we still support older
+    app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps);
+}
+
+fn running(id: &str) -> Option<Retained<NSRunningApplication>> {
+    NSRunningApplication::runningApplicationsWithBundleIdentifier(&NSString::from_str(id))
+        .iter()
+        .next()
+}
+
+fn send_paste(pid: c_int, key: CGKeyCode) {
+    for down in [true, false] {
+        if let Some(ev) = CGEvent::new_keyboard_event(None, key, down) {
+            CGEvent::set_flags(Some(&ev), CGEventFlags::MaskCommand);
+            CGEvent::post_to_pid(pid, Some(&ev));
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{activate_script, asns, paste_script, MacOs, Platform};
+    use super::{asns, MacOs, Platform};
 
     #[test]
     fn asns_are_parsed_front_to_back() {
@@ -263,24 +339,15 @@ mod tests {
         assert!(asns("garbage without quotes").is_empty());
     }
 
+    /// Not `== ANSI_PASTE_KEY`: that only holds on QWERTY-family layouts.
     #[test]
-    fn activating_waits_for_the_app_to_be_frontmost() {
-        let s = activate_script("com.apple.TextEdit");
-        assert!(s.starts_with("tell application id \"com.apple.TextEdit\" to activate"));
-        assert!(s.contains("exit repeat"), "must poll, not blind-delay: {s}");
-        assert!(!s.contains("keystroke"), "focus restore must not paste: {s}");
+    fn the_active_layout_yields_a_paste_key() {
+        assert!(super::paste_key_in_current_layout().is_some());
     }
 
     #[test]
-    fn pasting_activates_first_then_types() {
-        let s = paste_script(Some("com.apple.TextEdit"));
-        assert!(s.starts_with(&activate_script("com.apple.TextEdit")));
-        assert!(s.trim_end().ends_with("keystroke \"v\" using command down"));
-    }
-
-    #[test]
-    fn pasting_without_a_target_still_types() {
-        assert!(paste_script(None).contains("keystroke"));
+    fn an_app_that_isnt_running_has_nothing_to_paste_into() {
+        assert!(super::running("com.example.definitely-not-running").is_none());
     }
 
     // Ignored by default: it overwrites the real clipboard of whoever runs the
