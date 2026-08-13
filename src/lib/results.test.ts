@@ -1,11 +1,11 @@
 import { expect, test, vi } from "vitest";
 import { appToResult, clipToResult, snipToResult, fileToResult, buildResults,
-         historyToResult, translationToResult, langToResult, gifToResult } from "./results";
+         historyToResult, translationToResult, langToResult, gifToResult, formatBytes } from "./results";
 import { RunActions } from "./actions";
 import { Result, TranslationEntry, Gif } from "../types";
 
 const fakeActions = (): RunActions => ({
-  paste: vi.fn(), open: vi.fn(), copy: vi.fn(), record: vi.fn(),
+  paste: vi.fn(), pasteClip: vi.fn(), open: vi.fn(), copy: vi.fn(), record: vi.fn(),
   pasteGif: vi.fn(), favorite: vi.fn(),
 });
 
@@ -23,12 +23,40 @@ test("fileToResult run() opens the path", () => {
   expect(a.open).toHaveBeenCalledWith("/x/notes.txt");
 });
 
-test("clipToResult collapses whitespace in title, keeps full body, pastes on run", () => {
+test("clipToResult collapses whitespace in a text title and pastes the entry on run", () => {
   const a = fakeActions();
-  const r = clipToResult("hello   \n  world", 2, a);
-  expect(r).toMatchObject({ id: "clip:2", title: "hello world", body: "hello   \n  world" });
+  const clip = { kind: "text", text: "hello   \n  world" } as const;
+  const r = clipToResult(clip, 2, a);
+  expect(r).toMatchObject({ id: "clip:2", title: "hello world", clip });
   r.run();
-  expect(a.paste).toHaveBeenCalledWith("hello   \n  world");
+  expect(a.pasteClip).toHaveBeenCalledWith(clip);
+});
+
+test("clipToResult titles an image by its name and opens it on altRun", () => {
+  const a = fakeActions();
+  const clip = { kind: "image", path: "/i/a.png", name: "logo.png", width: 1920, height: 1080, bytes: 2_500_000 } as const;
+  const r = clipToResult(clip, 0, a);
+  expect(r).toMatchObject({ title: "logo.png", subtitle: "1920\u00d71080 \u00b7 2.4 MB" });
+  r.altRun!();
+  expect(a.open).toHaveBeenCalledWith("/i/a.png");
+});
+
+test("clipToResult names files, and counts them when there is more than one", () => {
+  const a = fakeActions();
+  const one = clipToResult({ kind: "files", paths: ["/d/report.pdf"] }, 0, a);
+  expect(one).toMatchObject({ title: "report.pdf", subtitle: "/d/report.pdf" });
+
+  const many = clipToResult({ kind: "files", paths: ["/d/a.txt", "/d/b.txt"] }, 1, a);
+  expect(many).toMatchObject({ title: "a.txt, b.txt", subtitle: "2 files" });
+  many.altRun!();
+  expect(a.open).toHaveBeenCalledWith("/d/a.txt");
+});
+
+test("formatBytes stays readable across magnitudes", () => {
+  expect(formatBytes(512)).toBe("512 B");
+  expect(formatBytes(2048)).toBe("2.0 KB");
+  expect(formatBytes(2_500_000)).toBe("2.4 MB");
+  expect(formatBytes(20_000_000)).toBe("19 MB");
 });
 
 test("snipToResult falls back to text when keyword empty", () => {

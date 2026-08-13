@@ -1,9 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Gif, TranslationEntry } from "../types";
+import { Clip, Gif, TranslationEntry } from "../types";
 
 // Injected into result mappers so those stay pure/testable.
 export type RunActions = {
   paste: (text: string) => Promise<void> | void;
+  // A history entry of any kind; images and files go back on the clipboard as
+  // file references, so pasting them attaches the file rather than its path.
+  pasteClip: (clip: Clip) => Promise<void> | void;
   open: (path: string) => Promise<void> | void;
   copy: (text: string) => Promise<void> | void;
   record: (entry: TranslationEntry) => Promise<void> | void;
@@ -18,6 +21,7 @@ export type RunActions = {
 // navigator.clipboard needs a focused document we're in the middle of giving away.
 export const runActions: RunActions = {
   paste: (text) => invoke("paste_text", { text }),
+  pasteClip: (clip) => invoke("paste_clip", { clip }),
   open: (path) => invoke("open_path", { path }),
   copy: (text) => invoke("write_clipboard", { text }),
   record: (entry) => invoke("record_translation", { entry }),

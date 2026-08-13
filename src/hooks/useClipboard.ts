@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Result } from "../types";
+import { Clip, Result } from "../types";
 import { RunActions } from "../lib/actions";
 import { clipToResult } from "../lib/results";
 
@@ -8,8 +8,8 @@ export function useClipboard(actions: RunActions): { clips: Result[]; load: () =
   const [clips, setClips] = useState<Result[]>([]);
 
   const load = useCallback(() => {
-    invoke<string[]>("clipboard_history").then((list) =>
-      setClips(list.map((text, i) => clipToResult(text, i, actions)))
+    invoke<Clip[]>("clipboard_history").then((list) =>
+      setClips(list.map((clip, i) => clipToResult(clip, i, actions)))
     );
   }, [actions]);
 

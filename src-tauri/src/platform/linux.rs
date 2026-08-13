@@ -42,7 +42,23 @@ impl Platform for Linux {
         Ok(())
     }
 
-    fn copy_file(&self, _path: &str) -> Result<(), String> {
+    fn copy_files(&self, _paths: &[String]) -> Result<(), String> {
         Ok(()) // TODO: wl-copy --type text/uri-list, or xclip -selection clipboard -t text/uri-list
+    }
+
+    fn clipboard_files(&self) -> Vec<String> {
+        Vec::new() // TODO: wl-paste --type text/uri-list, or xclip -o -t text/uri-list
+    }
+
+    fn clipboard_url(&self) -> Option<String> {
+        None // TODO: the text/uri-list target, when it is not a file
+    }
+
+    fn app_name(&self, _bundle_id: &str) -> Option<String> {
+        None // TODO: the .desktop file's Name= key
+    }
+
+    fn clipboard_change_count(&self) -> Option<u64> {
+        None // X11/Wayland expose no clipboard generation counter
     }
 }

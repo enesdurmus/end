@@ -10,6 +10,7 @@ type Prefs = {
   toggle_shortcut: string;
   clipboard_shortcut: string;
   history_limit: number;
+  image_limit: number;
   translate_target: string;
   translate_provider: string;
   klipy_api_key: string;
@@ -61,30 +62,41 @@ function HotkeyRow({ label, kind, value, onChanged }: { label: string; kind: Kin
   );
 }
 
-// backend clamps to this range too; mirror it so the UI shows the persisted value
-const clampLimit = (n: number) => Math.min(Math.max(Math.trunc(n), 1), 10000);
+type LimitRow = {
+  label: string;
+  command: string;
+  min: number;
+  max: number;
+  hint?: string;
+  value: number;
+  onChanged: (n: number) => void;
+};
 
-function HistoryLimitRow({ value, onChanged }: { value: number; onChanged: (n: number) => void }) {
+// Images are capped apart from text: one screenshot costs what a thousand
+// snippets do. The backend clamps to the same range; mirroring it here just
+// keeps the field showing the value that was actually persisted.
+function LimitRow({ label, command, min, max, hint, value, onChanged }: LimitRow) {
   const [text, setText] = useState(String(value));
   const [error, setError] = useState("");
 
   const commit = () => {
     const n = Number(text);
-    if (!Number.isFinite(n) || n < 1) { setError("Must be a number ≥ 1"); return; }
-    const limit = clampLimit(n);
-    invoke("set_history_limit", { limit })
+    if (!Number.isFinite(n) || n < min) { setError(`Must be a number ≥ ${min}`); return; }
+    const limit = Math.min(Math.max(Math.trunc(n), min), max);
+    invoke(command, { limit })
       .then(() => { setError(""); setText(String(limit)); onChanged(limit); })
       .catch((err) => setError(String(err)));
   };
 
   return (
-    <Field label="Clipboard History Limit">
+    <Field label={label}>
       <Input
-        type="number" min={1} max={10000} className="w-24" value={text}
+        type="number" min={min} max={max} className="w-24" value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
       />
+      {hint && !error && <div className="text-fg-dim text-xs mt-1">{hint}</div>}
       {error && <div className="text-danger text-xs mt-1">{error}</div>}
     </Field>
   );
@@ -186,8 +198,14 @@ export function Preferences() {
       <HotkeyRow label="Clipboard History" kind="clipboard" value={prefs.clipboard_shortcut}
         onChanged={(accel) => setPrefs({ ...prefs, clipboard_shortcut: accel })} />
 
-      <HistoryLimitRow value={prefs.history_limit}
+      <LimitRow label="Clipboard History Limit" command="set_history_limit" min={1} max={10000}
+        value={prefs.history_limit}
         onChanged={(n) => setPrefs({ ...prefs, history_limit: n })} />
+
+      <LimitRow label="Clipboard Image Limit" command="set_image_limit" min={0} max={1000}
+        hint="Images are kept separately; 0 keeps none."
+        value={prefs.image_limit}
+        onChanged={(n) => setPrefs({ ...prefs, image_limit: n })} />
 
       <TranslateRows prefs={prefs} onChanged={(p) => setPrefs({ ...prefs, ...p })} />
 

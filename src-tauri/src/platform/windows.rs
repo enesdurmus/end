@@ -43,7 +43,23 @@ impl Platform for Windows {
         Ok(())
     }
 
-    fn copy_file(&self, _path: &str) -> Result<(), String> {
+    fn copy_files(&self, _paths: &[String]) -> Result<(), String> {
         Ok(()) // TODO: OleSetClipboard with a CF_HDROP drop-file descriptor
+    }
+
+    fn clipboard_files(&self) -> Vec<String> {
+        Vec::new() // TODO: GetClipboardData(CF_HDROP) + DragQueryFileW
+    }
+
+    fn clipboard_url(&self) -> Option<String> {
+        None // TODO: CF_HTML / CFSTR_INETURL clipboard formats
+    }
+
+    fn app_name(&self, _bundle_id: &str) -> Option<String> {
+        None // TODO: GetFileVersionInfo FileDescription
+    }
+
+    fn clipboard_change_count(&self) -> Option<u64> {
+        None // TODO: GetClipboardSequenceNumber
     }
 }
