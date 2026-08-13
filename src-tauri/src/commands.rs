@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
-use crate::clipboard;
+use crate::clipboard::{self, Clip};
 use crate::focus;
 use crate::gifs::{self, Gif};
 use crate::platform::{host, AppEntry, Platform};
@@ -22,8 +22,34 @@ pub fn list_apps() -> Vec<AppEntry> {
 }
 
 #[tauri::command]
-pub fn clipboard_history(state: tauri::State<ClipState>) -> Vec<String> {
+pub fn clipboard_history(state: tauri::State<ClipState>) -> Vec<Clip> {
     state.list.lock().unwrap().clone()
+}
+
+/// A history row can outlive the files it points at — the user moved or deleted
+/// them since copying. Pasting a reference to nothing looks like the paste
+/// silently failed, so say so instead and leave the launcher open.
+fn copy_existing(paths: &[String]) -> Result<(), String> {
+    let live: Vec<String> =
+        paths.iter().filter(|p| std::path::Path::new(p).exists()).cloned().collect();
+    if live.is_empty() {
+        return Err("those files are no longer on disk".into());
+    }
+    host().copy_files(&live)
+}
+
+/// Put a history entry back on the clipboard and paste it into the app behind us.
+/// Images and files go on as file references, not pixels, so pasting into a chat
+/// attaches the file the way copying it in Finder would.
+#[tauri::command]
+pub fn paste_clip(clip: Clip, app: tauri::AppHandle) -> Result<(), String> {
+    match &clip {
+        Clip::Text { text } => set_clipboard(text.clone())?,
+        Clip::Image { path, .. } => copy_existing(std::slice::from_ref(path))?,
+        Clip::Files { paths } => copy_existing(paths)?,
+    }
+    focus::hide_and_paste(&app);
+    Ok(())
 }
 
 fn set_clipboard(text: String) -> Result<(), String> {
@@ -115,15 +141,37 @@ pub fn set_history_limit(
 ) -> Result<(), String> {
     let limit = limit.clamp(1, 10_000); // guard against 0 / absurd values
     state.limit.store(limit, Ordering::Relaxed);
-    let mut list = state.list.lock().unwrap();
-    if list.len() > limit {
-        list.truncate(limit);
-    }
-    clipboard::save(&state.dir, &list);
+    apply_caps(&state);
 
     let mut prefs = preferences::load(&state.dir);
     prefs.history_limit = limit;
     preferences::save(&state.dir, &prefs)
+}
+
+#[tauri::command]
+pub fn set_image_limit(limit: usize, state: tauri::State<ClipState>) -> Result<(), String> {
+    let limit = limit.clamp(0, 1_000); // 0 is meaningful here: keep no images at all
+    state.image_limit.store(limit, Ordering::Relaxed);
+    apply_caps(&state);
+
+    let mut prefs = preferences::load(&state.dir);
+    prefs.image_limit = limit;
+    preferences::save(&state.dir, &prefs)
+}
+
+/// Re-trim the history to the current caps, persist it, and delete the PNGs of
+/// whatever that dropped. Shared by both limit commands so lowering either one
+/// frees the disk immediately instead of at the next copy.
+fn apply_caps(state: &ClipState) {
+    let text_cap = state.limit.load(Ordering::Relaxed);
+    let image_cap = state.image_limit.load(Ordering::Relaxed);
+    let mut list = state.list.lock().unwrap();
+    let evicted = clipboard::trim(&mut list, text_cap, image_cap);
+    clipboard::save(&state.dir, &list);
+    drop(list);
+    for path in evicted {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 #[tauri::command]
@@ -240,7 +288,7 @@ pub async fn paste_gif(gif: Gif, app: tauri::AppHandle) -> Result<(), String> {
         gifs::Source::Local => std::path::PathBuf::from(&gif.url),
         gifs::Source::Remote => gifs::download_temp(&gif.id, &gif.url).await?,
     };
-    host().copy_file(&path.to_string_lossy())?;
+    host().copy_files(&[path.to_string_lossy().into_owned()])?;
     // hiding and the paste keystroke belong to focus.rs — the same reason
     // paste_text goes through it, and the clipboard write is async besides
     focus::hide_and_paste(&app);

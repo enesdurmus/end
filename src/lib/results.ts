@@ -1,4 +1,4 @@
-import { Gif, Result, TranslationEntry } from "../types";
+import { Clip, Gif, Result, TranslationEntry } from "../types";
 import { RunActions } from "./actions";
 import { fuzzyFilter } from "./fuzzy";
 import { Mode } from "./navigation";
@@ -28,13 +28,41 @@ export function fileToResult(f: RawFile, actions: RunActions): Result {
   };
 }
 
-export function clipToResult(text: string, i: number, actions: RunActions): Result {
+export const basename = (p: string) => p.split("/").pop() || p;
+
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}
+
+// Titles double as the search haystack (fuzzyFilter matches on title), so an
+// image is titled by its dimensions and files by their names — both typeable.
+// ⌘Enter opens what a row points at; plain text has nothing to open.
+export function clipToResult(clip: Clip, i: number, actions: RunActions): Result {
+  const base = { id: "clip:" + i, type: "clipboard" as const, clip, run: () => actions.pasteClip(clip) };
+  if (clip.kind === "text") {
+    return { ...base, title: clip.text.replace(/\s+/g, " ").slice(0, 80) };
+  }
+  if (clip.kind === "image") {
+    // Copied pixels have no filename; the backend names them after their source
+    // URL or the app they came from, so the title is always something typeable.
+    return {
+      ...base,
+      title: clip.name,
+      subtitle: `${clip.width}×${clip.height} · ${formatBytes(clip.bytes)}`,
+      altRun: () => actions.open(clip.path),
+    };
+  }
+  const [first, ...rest] = clip.paths;
   return {
-    id: "clip:" + i,
-    type: "clipboard",
-    title: text.replace(/\s+/g, " ").slice(0, 80),
-    body: text,
-    run: () => actions.paste(text),
+    ...base,
+    title: clip.paths.map(basename).join(", "),
+    subtitle: rest.length ? `${clip.paths.length} files` : first,
+    altRun: () => actions.open(first),
   };
 }
 

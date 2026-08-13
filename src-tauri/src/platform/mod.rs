@@ -31,11 +31,24 @@ pub trait Platform: Send + Sync {
     ///
     /// Called on the main thread, before the launcher's window is hidden.
     fn paste(&self, prev: Option<String>);
-    /// Puts a file reference on the system clipboard, the way copying a file in a
+    /// Puts file references on the system clipboard, the way copying files in a
     /// file manager does — so pasting into a chat or a mail composer attaches the
-    /// file itself. Distinct from the text clipboard `arboard` handles, which can
-    /// only carry decoded pixels and so drops a GIF's animation.
-    fn copy_file(&self, path: &str) -> Result<(), String>;
+    /// files themselves. Distinct from the text clipboard `arboard` handles, which
+    /// can only carry decoded pixels and so drops a GIF's animation.
+    fn copy_files(&self, paths: &[String]) -> Result<(), String>;
+    /// Files currently on the clipboard, as absolute paths; empty when the
+    /// clipboard holds something else.
+    fn clipboard_files(&self) -> Vec<String>;
+    /// The source URL an app offered alongside what it put on the clipboard, if
+    /// any. Copied pixels carry no filename, so this is the only chance of one.
+    fn clipboard_url(&self) -> Option<String>;
+    /// An app's display name ("Safari") from its bundle id ("com.apple.Safari").
+    fn app_name(&self, bundle_id: &str) -> Option<String>;
+    /// A counter the OS bumps on every clipboard write, so the watcher can skip a
+    /// poll without reading (and, for an image, decoding) the contents.
+    /// `None` where the platform offers no such counter — the caller then has to
+    /// inspect the clipboard every time.
+    fn clipboard_change_count(&self) -> Option<u64>;
     /// Whether the OS has granted the input-synthesis / accessibility permission.
     fn accessibility_granted(&self) -> bool;
     /// Open the OS settings pane where the user grants that permission.

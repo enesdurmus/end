@@ -5,10 +5,12 @@ use tauri_plugin_global_shortcut::Shortcut;
 
 /// Clipboard history. Focus lives in `crate::focus`, not here.
 pub struct ClipState {
-    pub list: Mutex<Vec<String>>,
+    pub list: Mutex<Vec<crate::clipboard::Clip>>,
     pub dir: PathBuf,
     // max entries kept; user-editable, read lock-free by the watcher thread
     pub limit: AtomicUsize,
+    // images are capped on their own: they cost megabytes each, not bytes
+    pub image_limit: AtomicUsize,
 }
 
 /// Live shortcuts + the config dir, shared between the press handler and the

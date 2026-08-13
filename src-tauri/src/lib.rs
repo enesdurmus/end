@@ -51,11 +51,23 @@ pub fn run() {
             windows::wire(handle);
 
             let initial = clipboard::load(&dir);
-            let limit = preferences::load(&dir).history_limit;
+            // Clipboard images are rendered from disk through the asset protocol,
+            // same as gif thumbnails; and blobs that no entry points at any more (a crash
+            // between writing one and saving the history) are swept once, here.
+            let images = clipboard::images_dir(&dir);
+            if let Err(e) = std::fs::create_dir_all(&images) {
+                eprintln!("clipboard setup: create_dir_all({}) failed: {e}", images.display());
+            }
+            if let Err(e) = handle.asset_protocol_scope().allow_directory(&images, false) {
+                eprintln!("clipboard setup: allow_directory({}) failed: {e}", images.display());
+            }
+            clipboard::sweep_images(&images, &initial);
+
             app.manage(state::ClipState {
                 list: Mutex::new(initial),
                 dir: dir.clone(),
-                limit: AtomicUsize::new(limit),
+                limit: AtomicUsize::new(prefs.history_limit),
+                image_limit: AtomicUsize::new(prefs.image_limit),
             });
             app.manage(state::TranslateState {
                 list: Mutex::new(translate_history::load(&dir)),
@@ -70,6 +82,7 @@ pub fn run() {
             commands::open_path,
             commands::search_files,
             commands::clipboard_history,
+            commands::paste_clip,
             commands::paste_text,
             commands::write_clipboard,
             commands::close_launcher,
@@ -78,6 +91,7 @@ pub fn run() {
             commands::get_preferences,
             commands::set_shortcut,
             commands::set_history_limit,
+            commands::set_image_limit,
             commands::check_accessibility,
             commands::open_accessibility_settings,
             commands::translate,
