@@ -77,6 +77,12 @@ pub fn close_launcher(app: tauri::AppHandle) {
     focus::hide(&app);
 }
 
+/// Called by the frontend after it applies the shortcut's mode.
+#[tauri::command]
+pub fn show_launcher(app: tauri::AppHandle) {
+    focus::show(&app);
+}
+
 #[tauri::command]
 pub fn open_path(path: String, app: tauri::AppHandle) -> Result<(), String> {
     host().open_path(&path)?;
