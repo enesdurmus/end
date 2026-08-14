@@ -1,4 +1,4 @@
-use super::{AppEntry, Platform};
+use super::{b64, AppEntry, Platform};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2_app_kit::{NSApplicationActivationOptions, NSPasteboard, NSRunningApplication};
@@ -222,20 +222,6 @@ fn find_icns(app_path: &str) -> Option<PathBuf> {
         .flatten()
         .map(|e| e.path())
         .find(|p| p.extension().is_some_and(|x| x == "icns"))
-}
-
-fn b64(data: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut s = String::with_capacity(data.len().div_ceil(3) * 4);
-    for c in data.chunks(3) {
-        let b = [c[0], *c.get(1).unwrap_or(&0), *c.get(2).unwrap_or(&0)];
-        let n = (b[0] as u32) << 16 | (b[1] as u32) << 8 | b[2] as u32;
-        s.push(T[(n >> 18 & 63) as usize] as char);
-        s.push(T[(n >> 12 & 63) as usize] as char);
-        s.push(if c.len() > 1 { T[(n >> 6 & 63) as usize] as char } else { '=' });
-        s.push(if c.len() > 2 { T[(n & 63) as usize] as char } else { '=' });
-    }
-    s
 }
 
 /// Pulls the ASNs out of a `lsappinfo visibleProcessList` line, front-to-back.

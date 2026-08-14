@@ -27,6 +27,11 @@ arboard = "3.6.1"
 png = "0.17"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
+# Without this, arboard talks to XWayland instead of the Wayland clipboard, and
+# a copy made in a native Wayland app is invisible to us.
+[target.'cfg(target_os = "linux")'.dependencies]
+arboard = { version = "3.6.1", features = ["wayland-data-control"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSPasteboard", "NSPasteboardItem", "NSRunningApplication", "libc"] }
