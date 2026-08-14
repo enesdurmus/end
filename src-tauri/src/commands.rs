@@ -1,6 +1,3 @@
-//! All `#[tauri::command]` handlers. Each is a thin adapter that delegates to a
-//! platform method or a storage module — no business logic lives here.
-
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use tauri::Manager;
@@ -26,10 +23,7 @@ pub fn clipboard_history(state: tauri::State<ClipState>) -> Vec<Clip> {
     state.list.lock().unwrap().clone()
 }
 
-/// A history row can outlive the files it points at — the user moved or deleted
-/// them since copying. Pasting a reference to nothing looks like the paste
-/// silently failed, so say so instead and leave the launcher open.
-fn copy_existing(paths: &[String]) -> Result<(), String> {
+fn copy_files_still_on_disk(paths: &[String]) -> Result<(), String> {
     let live: Vec<String> =
         paths.iter().filter(|p| std::path::Path::new(p).exists()).cloned().collect();
     if live.is_empty() {
@@ -38,15 +32,14 @@ fn copy_existing(paths: &[String]) -> Result<(), String> {
     host().copy_files(&live)
 }
 
-/// Put a history entry back on the clipboard and paste it into the app behind us.
-/// Images and files go on as file references, not pixels, so pasting into a chat
-/// attaches the file the way copying it in Finder would.
+/// Images and files go back as file references, not pixels, so pasting into a
+/// chat attaches the file the way copying it in Finder would.
 #[tauri::command]
 pub fn paste_clip(clip: Clip, app: tauri::AppHandle) -> Result<(), String> {
     match &clip {
         Clip::Text { text } => set_clipboard(text.clone())?,
-        Clip::Image { path, .. } => copy_existing(std::slice::from_ref(path))?,
-        Clip::Files { paths } => copy_existing(paths)?,
+        Clip::Image { path, .. } => copy_files_still_on_disk(std::slice::from_ref(path))?,
+        Clip::Files { paths } => copy_files_still_on_disk(paths)?,
     }
     focus::hide_and_paste(&app);
     Ok(())
@@ -71,13 +64,12 @@ pub fn write_clipboard(text: String, app: tauri::AppHandle) -> Result<(), String
     Ok(())
 }
 
-/// Escape / dismiss.
 #[tauri::command]
 pub fn close_launcher(app: tauri::AppHandle) {
     focus::hide(&app);
 }
 
-/// Called by the frontend after it applies the shortcut's mode.
+/// Called by the frontend once it has applied the shortcut's mode.
 #[tauri::command]
 pub fn show_launcher(app: tauri::AppHandle) {
     focus::show(&app);
@@ -145,7 +137,7 @@ pub fn set_history_limit(
     limit: usize,
     state: tauri::State<ClipState>,
 ) -> Result<(), String> {
-    let limit = limit.clamp(1, 10_000); // guard against 0 / absurd values
+    let limit = limit.clamp(1, 10_000);
     state.limit.store(limit, Ordering::Relaxed);
     apply_caps(&state);
 
@@ -156,7 +148,7 @@ pub fn set_history_limit(
 
 #[tauri::command]
 pub fn set_image_limit(limit: usize, state: tauri::State<ClipState>) -> Result<(), String> {
-    let limit = limit.clamp(0, 1_000); // 0 is meaningful here: keep no images at all
+    let limit = limit.clamp(0, 1_000); // 0 means keep no images at all
     state.image_limit.store(limit, Ordering::Relaxed);
     apply_caps(&state);
 
@@ -165,9 +157,7 @@ pub fn set_image_limit(limit: usize, state: tauri::State<ClipState>) -> Result<(
     preferences::save(&state.dir, &prefs)
 }
 
-/// Re-trim the history to the current caps, persist it, and delete the PNGs of
-/// whatever that dropped. Shared by both limit commands so lowering either one
-/// frees the disk immediately instead of at the next copy.
+/// Lowering a limit frees the disk now, rather than at the next copy.
 fn apply_caps(state: &ClipState) {
     let text_cap = state.limit.load(Ordering::Relaxed);
     let image_cap = state.image_limit.load(Ordering::Relaxed);
@@ -193,8 +183,8 @@ pub async fn translate(
     crate::translate::fetch(prefs.translate_provider, &text, &from, &to).await
 }
 
-// Both fields are optional: the language picker sets only the target, the
-// Preferences window sets only the engine, and neither clobbers the other.
+/// Both fields are optional: the language picker sets only the target, the
+/// Preferences window only the engine.
 #[tauri::command]
 pub fn set_translate_prefs(
     app: tauri::AppHandle,
@@ -225,8 +215,7 @@ pub fn set_gif_prefs(
     }
     if let Some(d) = gif_dir {
         prefs.gif_dir = d;
-        // the webview can only render thumbnails from a folder the asset
-        // protocol has been told about, and this one just changed
+        // thumbnails only render from a folder the asset protocol knows about
         let resolved = gifs::dir(&dir, &prefs.gif_dir);
         std::fs::create_dir_all(&resolved).map_err(|e| e.to_string())?;
         app.asset_protocol_scope()
@@ -267,8 +256,6 @@ pub fn clear_translate_history(state: tauri::State<TranslateState>) -> Result<()
     Ok(())
 }
 
-/// The library folder, resolved from preferences. Created on demand by the
-/// callers that write into it, not here — listing an absent folder is fine.
 fn gif_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
     let dir = app.path().app_config_dir().unwrap();
     let prefs = preferences::load(&dir);
@@ -289,14 +276,11 @@ pub async fn gif_search(query: String, app: tauri::AppHandle) -> Result<Vec<Gif>
 
 #[tauri::command]
 pub async fn paste_gif(gif: Gif, app: tauri::AppHandle) -> Result<(), String> {
-    // a local gif is already a file; a remote one has to become one first
     let path = match gif.source {
         gifs::Source::Local => std::path::PathBuf::from(&gif.url),
         gifs::Source::Remote => gifs::download_temp(&gif.id, &gif.url).await?,
     };
     host().copy_files(&[path.to_string_lossy().into_owned()])?;
-    // hiding and the paste keystroke belong to focus.rs — the same reason
-    // paste_text goes through it, and the clipboard write is async besides
     focus::hide_and_paste(&app);
     Ok(())
 }

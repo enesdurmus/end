@@ -3,8 +3,6 @@ use std::process::Command;
 
 pub struct Windows;
 
-// Skeleton impl: `open_path` works today; the rest are stubbed (return empty /
-// no-op, never panic) so the app runs. Each TODO names the native mechanism.
 impl Platform for Windows {
     fn list_apps(&self) -> Vec<AppEntry> {
         Vec::new() // TODO: scan Start Menu Programs *.lnk (all-users + per-user)
@@ -15,15 +13,19 @@ impl Platform for Windows {
     }
 
     fn open_path(&self, path: &str) -> Result<(), String> {
-        // empty "" is the window title arg `start` expects before the target
-        Command::new("cmd").args(["/C", "start", "", path]).spawn().map(|_| ()).map_err(|e| e.to_string())
+        let window_title = "";
+        Command::new("cmd")
+            .args(["/C", "start", window_title, path])
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 
     fn search_files(&self, _query: &str) -> Vec<AppEntry> {
         Vec::new() // TODO: Windows Search (ISearchQueryHelper) or Everything SDK
     }
 
-    fn app_behind(&self, _own: &str) -> Option<String> {
+    fn frontmost_app_other_than(&self, _own: &str) -> Option<String> {
         None // TODO: GetForegroundWindow + GetWindowThreadProcessId
     }
 
@@ -36,7 +38,7 @@ impl Platform for Windows {
     }
 
     fn accessibility_granted(&self) -> bool {
-        true // no equivalent permission gate on Windows
+        true
     }
 
     fn open_accessibility_settings(&self) -> Result<(), String> {
@@ -51,7 +53,7 @@ impl Platform for Windows {
         Vec::new() // TODO: GetClipboardData(CF_HDROP) + DragQueryFileW
     }
 
-    fn clipboard_url(&self) -> Option<String> {
+    fn clipboard_source_url(&self) -> Option<String> {
         None // TODO: CF_HTML / CFSTR_INETURL clipboard formats
     }
 

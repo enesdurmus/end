@@ -30,14 +30,10 @@ pub fn run() {
             let dir = app.path().app_config_dir().unwrap();
             let handle = app.handle();
 
-            // The gif folder is a preference, so its asset-protocol scope cannot
-            // live in tauri.conf.json. Granted here and re-granted by
-            // set_gif_prefs whenever the folder changes.
+            // the gif folder is a preference, so its asset-protocol scope can't
+            // live in tauri.conf.json; set_gif_prefs re-grants it on change
             let prefs = preferences::load(&dir);
             let gif_dir = gifs::dir(&dir, &prefs.gif_dir);
-            // Setup can't show UI, so a failure here can only be logged — but it must
-            // be logged, since the visible symptom (blank thumbnails) gives no hint
-            // that the asset-scope grant is what actually failed.
             if let Err(e) = std::fs::create_dir_all(&gif_dir) {
                 eprintln!("gif setup: create_dir_all({}) failed: {e}", gif_dir.display());
             }
@@ -51,9 +47,6 @@ pub fn run() {
             windows::wire(handle);
 
             let initial = clipboard::load(&dir);
-            // Clipboard images are rendered from disk through the asset protocol,
-            // same as gif thumbnails; and blobs that no entry points at any more (a crash
-            // between writing one and saving the history) are swept once, here.
             let images = clipboard::images_dir(&dir);
             if let Err(e) = std::fs::create_dir_all(&images) {
                 eprintln!("clipboard setup: create_dir_all({}) failed: {e}", images.display());

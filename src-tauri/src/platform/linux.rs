@@ -1,9 +1,4 @@
-//! Linux backend. Mechanisms are picked at runtime: X11 has `xdotool` for focus
-//! and keys, Wayland lets a client do neither, so focus is left to the
-//! compositor and only the keystroke is synthesised. A missing helper degrades
-//! that one feature; nothing here panics or hard-fails.
-
-use super::{b64, AppEntry, Platform};
+use super::{base64_encode, AppEntry, Platform};
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -18,9 +13,7 @@ impl Platform for Linux {
     fn list_apps(&self) -> Vec<AppEntry> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
-        // XDG order: the first file with a given id wins, so ~/.local/share
-        // shadows the system entry.
-        for dir in data_dirs() {
+        for dir in xdg_data_dirs_in_lookup_order() {
             let apps = dir.join("applications");
             collect_desktop_entries(&apps, &apps, 3, &mut seen, &mut out);
         }
@@ -29,21 +22,20 @@ impl Platform for Linux {
     }
 
     fn app_icon(&self, app_path: &str) -> Option<String> {
-        let icon = field(&fs::read_to_string(app_path).ok()?, "Icon")?.to_string();
-        // an absolute Icon= is legal, and skips the theme search
+        let icon = desktop_field(&fs::read_to_string(app_path).ok()?, "Icon")?.to_string();
         let file = if icon.starts_with('/') {
             PathBuf::from(&icon)
         } else {
-            find_icon(&icon)?
+            find_themed_icon(&icon)?
         };
         icon_data_uri(&file)
     }
 
     fn open_path(&self, path: &str) -> Result<(), String> {
         if path.ends_with(".desktop") {
-            return launch_desktop(path);
+            return launch_desktop_entry(path);
         }
-        detach(Command::new("xdg-open").arg(path))
+        spawn_detached(Command::new("xdg-open").arg(path))
     }
 
     fn search_files(&self, query: &str) -> Vec<AppEntry> {
@@ -51,32 +43,29 @@ impl Platform for Linux {
         if query.is_empty() {
             return Vec::new();
         }
-        // ponytail: no index installed means no results outside $HOME.
-        match ["plocate", "locate"].into_iter().find(|b| has(b)) {
+        match ["plocate", "locate"].into_iter().find(|b| on_path(b)) {
             Some(bin) => Command::new(bin)
                 .args(["-i", "-l", "20", "--", query])
                 .output()
                 .ok()
-                .map(|o| String::from_utf8_lossy(&o.stdout).lines().map(entry_for).collect())
+                .map(|o| String::from_utf8_lossy(&o.stdout).lines().map(file_entry).collect())
                 .unwrap_or_default(),
             None => walk_home(&query.to_lowercase()),
         }
     }
 
-    fn app_behind(&self, _own: &str) -> Option<String> {
+    fn frontmost_app_other_than(&self, _own: &str) -> Option<String> {
         if wayland() {
-            return None; // no Wayland client may ask who else is focused
+            return None;
         }
         let id = xdotool(&["getactivewindow"])?;
-        // excluding ourselves is the point, and only the pid can say
         let pid = xdotool(&["getwindowpid", &id])?;
         (pid != std::process::id().to_string()).then_some(id)
     }
 
     fn restore_focus(&self, prev: Option<String>) {
         if let Some(id) = prev {
-            // not --sync: it blocks until the window activates, which never
-            // happens if it closed meanwhile — and this is the main thread.
+            // no --sync: it blocks forever if the window closed meanwhile
             xdotool(&["windowactivate", &id]);
         }
     }
@@ -84,8 +73,7 @@ impl Platform for Linux {
     fn paste(&self, prev: Option<String>) {
         self.restore_focus(prev);
         let Some(key) = key_tool() else { return };
-        // The key goes wherever focus is, and focus only leaves us once the
-        // caller hides our window — right after this returns. So wait it out.
+        // focus only leaves us once the caller hides our window, right after this returns
         std::thread::spawn(move || {
             std::thread::sleep(paste_delay());
             key.press_paste();
@@ -94,20 +82,22 @@ impl Platform for Linux {
 
     fn copy_files(&self, paths: &[String]) -> Result<(), String> {
         let uris: String = paths.iter().map(|p| format!("{}\n", file_uri(p))).collect();
-        // ponytail: text/uri-list only, since one helper process can own one
-        // target — file managers wanting x-special/gnome-copied-files see nothing.
-        match backend() {
-            Clip::Wl => feed(Command::new("wl-copy").args(["--type", "text/uri-list"]), &uris),
-            Clip::X11 => feed(
+        match clip_tool() {
+            ClipTool::Wayland => {
+                pipe_to(Command::new("wl-copy").args(["--type", "text/uri-list"]), &uris)
+            }
+            ClipTool::X11 => pipe_to(
                 Command::new("xclip").args(["-selection", "clipboard", "-t", "text/uri-list"]),
                 &uris,
             ),
-            Clip::None => Err("no clipboard tool: install wl-clipboard (Wayland) or xclip (X11)".into()),
+            ClipTool::None => {
+                Err("no clipboard tool: install wl-clipboard (Wayland) or xclip (X11)".into())
+            }
         }
     }
 
     fn clipboard_files(&self) -> Vec<String> {
-        uri_list()
+        clipboard_uri_list()
             .lines()
             .filter_map(|l| l.strip_prefix("file://"))
             .map(percent_decode)
@@ -115,29 +105,22 @@ impl Platform for Linux {
             .collect()
     }
 
-    fn clipboard_url(&self) -> Option<String> {
-        // Not a file URI: that is a Files entry already, and its path would be a
-        // misleading name for pixels copied from somewhere else.
-        let list = uri_list();
+    fn clipboard_source_url(&self) -> Option<String> {
+        let list = clipboard_uri_list();
         let first = list.lines().find(|l| !l.trim().is_empty())?.trim();
         (!first.starts_with("file://")).then(|| first.to_string())
     }
 
     fn app_name(&self, window_id: &str) -> Option<String> {
-        // `app_behind` hands back a window id, not a bundle id
         xdotool(&["getwindowclassname", window_id])
     }
 
     fn clipboard_change_count(&self) -> Option<u64> {
-        // Only Wayland has a change event to count; X11 gets the read-every-tick
-        // path the trait documents.
         let n = wl_change_counter()?.load(Ordering::Relaxed);
         (n != COUNTER_DEAD).then_some(n)
     }
 
     fn accessibility_granted(&self) -> bool {
-        // No permission gate exists here, so answer what the UI is really
-        // asking: can we synthesise a keystroke at all.
         key_tool().is_some()
     }
 
@@ -166,8 +149,7 @@ fn env_dir(key: &str, default: PathBuf) -> PathBuf {
     }
 }
 
-/// `$XDG_DATA_HOME` then `$XDG_DATA_DIRS`, in lookup order.
-fn data_dirs() -> Vec<PathBuf> {
+fn xdg_data_dirs_in_lookup_order() -> Vec<PathBuf> {
     let mut dirs = vec![env_dir("XDG_DATA_HOME", home().join(".local/share"))];
     let sys = std::env::var("XDG_DATA_DIRS").unwrap_or_default();
     let sys = if sys.is_empty() { "/usr/local/share:/usr/share".to_string() } else { sys };
@@ -175,18 +157,14 @@ fn data_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-/// A binary on `$PATH`, scanned rather than shelled out to `which` — this sits
-/// on the paste path.
-fn has(bin: &str) -> bool {
+fn on_path(bin: &str) -> bool {
     std::env::var_os("PATH")
         .map(|path| std::env::split_paths(&path).any(|d| d.join(bin).is_file()))
         .unwrap_or(false)
 }
 
 
-/// The value of `key` in the `[Desktop Entry]` group. Localised variants
-/// (`Name[tr]`) deliberately don't match.
-fn field<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+fn desktop_field<'a>(text: &'a str, key: &str) -> Option<&'a str> {
     text.lines()
         .skip_while(|l| l.trim() != "[Desktop Entry]")
         .skip(1)
@@ -197,12 +175,10 @@ fn field<'a>(text: &'a str, key: &str) -> Option<&'a str> {
         })
 }
 
-fn is_true(text: &str, key: &str) -> bool {
-    field(text, key) == Some("true")
+fn desktop_flag(text: &str, key: &str) -> bool {
+    desktop_field(text, key) == Some("true")
 }
 
-/// Walks `dir` for `*.desktop`, deduped by spec id (the path relative to
-/// `root`), so an earlier XDG dir shadows a later one.
 fn collect_desktop_entries(
     dir: &Path,
     root: &Path,
@@ -214,7 +190,7 @@ fn collect_desktop_entries(
     for e in entries.flatten() {
         let path = e.path();
         if path.is_dir() {
-            // is_dir follows symlinks, so the depth cap is also the loop guard
+            // is_dir follows symlinks, so the depth cap doubles as the loop guard
             if depth > 0 {
                 collect_desktop_entries(&path, root, depth - 1, seen, out);
             }
@@ -228,13 +204,13 @@ fn collect_desktop_entries(
             continue;
         }
         let Ok(text) = fs::read_to_string(&path) else { continue };
-        if field(&text, "Type") != Some("Application")
-            || is_true(&text, "NoDisplay")
-            || is_true(&text, "Hidden")
+        if desktop_field(&text, "Type") != Some("Application")
+            || desktop_flag(&text, "NoDisplay")
+            || desktop_flag(&text, "Hidden")
         {
             continue;
         }
-        if let Some(name) = field(&text, "Name") {
+        if let Some(name) = desktop_field(&text, "Name") {
             out.push(AppEntry {
                 name: name.to_string(),
                 path: path.to_string_lossy().to_string(),
@@ -243,23 +219,19 @@ fn collect_desktop_entries(
     }
 }
 
-fn launch_desktop(path: &str) -> Result<(), String> {
-    // only gio applies the entry properly: field codes, Terminal=, D-Bus activation
-    if has("gio") {
-        return detach(Command::new("gio").arg("launch").arg(path));
+fn launch_desktop_entry(path: &str) -> Result<(), String> {
+    // only gio applies field codes, Terminal= and D-Bus activation
+    if on_path("gio") {
+        return spawn_detached(Command::new("gio").arg("launch").arg(path));
     }
     let text = fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let exec = field(&text, "Exec").ok_or("desktop entry has no Exec=")?;
-    let mut argv = exec_argv(exec).into_iter();
+    let exec = desktop_field(&text, "Exec").ok_or("desktop entry has no Exec=")?;
+    let mut argv = exec_argv_without_field_codes(exec).into_iter();
     let bin = argv.next().ok_or("desktop entry has an empty Exec=")?;
-    detach(Command::new(bin).args(argv))
+    spawn_detached(Command::new(bin).args(argv))
 }
 
-/// `Exec=` minus its field codes (`%f`, `%U`, …) — we launch with no arguments.
-///
-/// ponytail: quoted arguments with spaces come apart here; gio, tried first,
-/// handles them.
-fn exec_argv(exec: &str) -> Vec<String> {
+fn exec_argv_without_field_codes(exec: &str) -> Vec<String> {
     exec.split_whitespace()
         .filter(|t| !(t.starts_with('%') && t.len() == 2))
         .map(|t| t.trim_matches('"').to_string())
@@ -267,17 +239,16 @@ fn exec_argv(exec: &str) -> Vec<String> {
 }
 
 
-/// Freedesktop icon lookup as a flat candidate list, covering both layouts in
-/// the wild (`theme/48x48/apps/x.png`, `theme/apps/48/x.png`) plus pixmaps.
-///
-/// ponytail: no index.theme and no Inherits= chain — misses fall through to
-/// hicolor, which the spec requires every icon to live in anyway.
-fn find_icon(name: &str) -> Option<PathBuf> {
-    const SIZES: [&str; 7] = ["64x64", "48x48", "128x128", "256x256", "32x32", "scalable", "symbolic"];
+fn find_themed_icon(name: &str) -> Option<PathBuf> {
+    const SIZES: [&str; 7] =
+        ["64x64", "48x48", "128x128", "256x256", "32x32", "scalable", "symbolic"];
     const EXTS: [&str; 2] = ["png", "svg"];
 
-    let mut bases = vec![home().join(".icons"), env_dir("XDG_DATA_HOME", home().join(".local/share")).join("icons")];
-    bases.extend(data_dirs().into_iter().map(|d| d.join("icons")));
+    let mut bases = vec![
+        home().join(".icons"),
+        env_dir("XDG_DATA_HOME", home().join(".local/share")).join("icons"),
+    ];
+    bases.extend(xdg_data_dirs_in_lookup_order().into_iter().map(|d| d.join("icons")));
 
     let user = user_icon_theme();
     let themes: Vec<&str> = [user.as_deref(), Some("hicolor"), Some("Adwaita")]
@@ -291,8 +262,6 @@ fn find_icon(name: &str) -> Option<PathBuf> {
             continue;
         }
         for theme in &themes {
-            // pruning here keeps a miss to a few stats instead of the whole
-            // cross product, and every app row asks for an icon
             let dir = base.join(theme);
             if !dir.is_dir() {
                 continue;
@@ -311,8 +280,7 @@ fn find_icon(name: &str) -> Option<PathBuf> {
             }
         }
     }
-    // pixmaps: no theme, no size, just the file
-    data_dirs()
+    xdg_data_dirs_in_lookup_order()
         .into_iter()
         .map(|d| d.join("pixmaps"))
         .flat_map(|d| EXTS.iter().map(move |e| d.join(format!("{name}.{e}"))))
@@ -332,26 +300,21 @@ fn user_icon_theme() -> Option<String> {
     .clone()
 }
 
-/// SVG goes to the webview as-is — it renders vectors, so nothing here needs a
-/// rasteriser.
 fn icon_data_uri(file: &Path) -> Option<String> {
     let mime = match file.extension()?.to_str()? {
         "png" => "image/png",
         "svg" => "image/svg+xml",
-        _ => return None, // .xpm: nothing renders it, nothing modern ships it
+        _ => return None,
     };
-    Some(format!("data:{mime};base64,{}", b64(&fs::read(file).ok()?)))
+    Some(format!("data:{mime};base64,{}", base64_encode(&fs::read(file).ok()?)))
 }
 
 
-fn entry_for(path: &str) -> AppEntry {
+fn file_entry(path: &str) -> AppEntry {
     let name = Path::new(path).file_name().and_then(|s| s.to_str()).unwrap_or(path);
     AppEntry { name: name.to_string(), path: path.to_string() }
 }
 
-/// Breadth-first, so shallow matches come first. Bounded in depth, results and
-/// directories visited: this runs per keystroke, and a home directory with a
-/// node_modules in it is effectively unbounded.
 fn walk_home(needle: &str) -> Vec<AppEntry> {
     const MAX_DEPTH: usize = 3;
     const MAX_RESULTS: usize = 20;
@@ -373,7 +336,7 @@ fn walk_home(needle: &str) -> Vec<AppEntry> {
                     continue;
                 }
                 if name.to_lowercase().contains(needle) {
-                    out.push(entry_for(&e.path().to_string_lossy()));
+                    out.push(file_entry(&e.path().to_string_lossy()));
                     if out.len() >= MAX_RESULTS {
                         return out;
                     }
@@ -389,31 +352,26 @@ fn walk_home(needle: &str) -> Vec<AppEntry> {
 }
 
 
-enum Clip {
-    Wl,
+enum ClipTool {
+    Wayland,
     X11,
     None,
 }
 
-/// Which clipboard helper to talk to, decided once. A Wayland session isn't
-/// enough on its own: `wl-clipboard` needs the data-control protocol, which
-/// Mutter historically lacks — there XWayland bridges the clipboard and `xclip`
-/// works, so the probe asks rather than guesses.
-fn backend() -> &'static Clip {
-    static B: OnceLock<Clip> = OnceLock::new();
+fn clip_tool() -> &'static ClipTool {
+    static B: OnceLock<ClipTool> = OnceLock::new();
     B.get_or_init(|| {
-        if wayland() && has("wl-copy") && has("wl-paste") && wl_data_control_works() {
-            Clip::Wl
-        } else if has("xclip") {
-            Clip::X11
+        if wayland() && on_path("wl-copy") && on_path("wl-paste") && wl_data_control_works() {
+            ClipTool::Wayland
+        } else if on_path("xclip") {
+            // XWayland bridges the clipboard where wl-clipboard can't reach it
+            ClipTool::X11
         } else {
-            Clip::None
+            ClipTool::None
         }
     })
 }
 
-/// `wl-paste -l` exits non-zero on an empty clipboard too, so the exit code
-/// can't be the signal — the unsupported-protocol message is.
 fn wl_data_control_works() -> bool {
     match Command::new("wl-paste").arg("-l").output() {
         Ok(o) => !String::from_utf8_lossy(&o.stderr).contains("does not support"),
@@ -421,11 +379,10 @@ fn wl_data_control_works() -> bool {
     }
 }
 
-fn feed(cmd: &mut Command, data: &str) -> Result<(), String> {
-    // Both helpers daemonize, so the child we spawn forks the process that will
-    // serve the selection and exits at once. Reaping it keeps every copy from
-    // leaving a zombie; dropping stdin below is what sends EOF.
-    let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::null()).spawn().map_err(|e| e.to_string())?;
+fn pipe_to(cmd: &mut Command, data: &str) -> Result<(), String> {
+    // both helpers daemonize, so the spawned child exits at once and needs reaping
+    let mut child =
+        cmd.stdin(Stdio::piped()).stdout(Stdio::null()).spawn().map_err(|e| e.to_string())?;
     child.stdin.take().ok_or("no stdin")?.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
     std::thread::spawn(move || {
         let _ = child.wait();
@@ -433,29 +390,26 @@ fn feed(cmd: &mut Command, data: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn uri_list() -> String {
-    let out = match backend() {
-        Clip::Wl => Command::new("wl-paste").args(["-n", "-t", "text/uri-list"]).output(),
-        Clip::X11 => {
-            Command::new("xclip").args(["-selection", "clipboard", "-t", "text/uri-list", "-o"]).output()
-        }
-        Clip::None => return String::new(),
+fn clipboard_uri_list() -> String {
+    let out = match clip_tool() {
+        ClipTool::Wayland => Command::new("wl-paste").args(["-n", "-t", "text/uri-list"]).output(),
+        ClipTool::X11 => Command::new("xclip")
+            .args(["-selection", "clipboard", "-t", "text/uri-list", "-o"])
+            .output(),
+        ClipTool::None => return String::new(),
     };
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
-        _ => String::new(), // clipboard holds something else; not an error
+        _ => String::new(),
     }
 }
 
-/// Sentinel for "the watcher died, go back to polling" — a real count starts at 1.
 const COUNTER_DEAD: u64 = 0;
 
-/// A counter fed by `wl-paste --watch`, turning the 500ms poll into an atomic
-/// load: nothing is read, and a big screenshot is never decoded twice.
 fn wl_change_counter() -> Option<&'static AtomicU64> {
     static C: OnceLock<Option<&'static AtomicU64>> = OnceLock::new();
     *C.get_or_init(|| {
-        if !matches!(backend(), Clip::Wl) {
+        if !matches!(clip_tool(), ClipTool::Wayland) {
             return None;
         }
         let counter: &'static AtomicU64 = Box::leak(Box::new(AtomicU64::new(1)));
@@ -497,16 +451,18 @@ fn percent_decode(s: &str) -> String {
     let mut i = 0;
     while i < b.len() {
         match (b[i], b.get(i + 1), b.get(i + 2)) {
-            (b'%', Some(h), Some(l)) => match u8::from_str_radix(&format!("{}{}", *h as char, *l as char), 16) {
-                Ok(byte) => {
-                    out.push(byte);
-                    i += 3;
+            (b'%', Some(h), Some(l)) => {
+                match u8::from_str_radix(&format!("{}{}", *h as char, *l as char), 16) {
+                    Ok(byte) => {
+                        out.push(byte);
+                        i += 3;
+                    }
+                    Err(_) => {
+                        out.push(b'%');
+                        i += 1;
+                    }
                 }
-                Err(_) => {
-                    out.push(b'%');
-                    i += 1;
-                }
-            },
+            }
             _ => {
                 out.push(b[i]);
                 i += 1;
@@ -526,28 +482,28 @@ fn xdotool(args: &[&str]) -> Option<String> {
     (!s.is_empty()).then_some(s)
 }
 
-enum Key {
+enum KeyTool {
     Xdotool,
     Wtype,
     Ydotool,
 }
 
-impl Key {
+impl KeyTool {
     fn press_paste(&self) {
         let mut cmd = match self {
-            Key::Xdotool => {
+            KeyTool::Xdotool => {
                 let mut c = Command::new("xdotool");
                 c.args(["key", "--clearmodifiers", "ctrl+v"]);
                 c
             }
-            Key::Wtype => {
+            KeyTool::Wtype => {
                 let mut c = Command::new("wtype");
                 c.args(["-M", "ctrl", "v", "-m", "ctrl"]);
                 c
             }
-            // ydotool speaks keycodes: 29 = leftctrl, 47 = v
-            Key::Ydotool => {
+            KeyTool::Ydotool => {
                 let mut c = Command::new("ydotool");
+                // keycodes: 29 = leftctrl, 47 = v
                 c.args(["key", "29:1", "47:1", "47:0", "29:0"]);
                 c
             }
@@ -556,19 +512,16 @@ impl Key {
     }
 }
 
-/// Wayland falls back to xdotool: under XWayland it still reaches X11 clients,
-/// which is most of them.
-fn key_tool() -> Option<Key> {
-    let candidates: [(&str, Key); 3] = if wayland() {
-        [("wtype", Key::Wtype), ("ydotool", Key::Ydotool), ("xdotool", Key::Xdotool)]
+fn key_tool() -> Option<KeyTool> {
+    // xdotool still reaches most Wayland clients through XWayland
+    let candidates: [(&str, KeyTool); 3] = if wayland() {
+        [("wtype", KeyTool::Wtype), ("ydotool", KeyTool::Ydotool), ("xdotool", KeyTool::Xdotool)]
     } else {
-        [("xdotool", Key::Xdotool), ("wtype", Key::Wtype), ("ydotool", Key::Ydotool)]
+        [("xdotool", KeyTool::Xdotool), ("wtype", KeyTool::Wtype), ("ydotool", KeyTool::Ydotool)]
     };
-    candidates.into_iter().find(|(bin, _)| has(bin)).map(|(_, k)| k)
+    candidates.into_iter().find(|(bin, _)| on_path(bin)).map(|(_, k)| k)
 }
 
-/// How long to wait for focus to leave us before sending Ctrl+V. Compositors
-/// differ, hence the knob.
 fn paste_delay() -> Duration {
     static D: OnceLock<Duration> = OnceLock::new();
     *D.get_or_init(|| {
@@ -580,9 +533,9 @@ fn paste_delay() -> Duration {
     })
 }
 
-/// Spawn without leaving a zombie behind.
-fn detach(cmd: &mut Command) -> Result<(), String> {
-    let mut child = cmd.stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| e.to_string())?;
+fn spawn_detached(cmd: &mut Command) -> Result<(), String> {
+    let mut child =
+        cmd.stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| e.to_string())?;
     std::thread::spawn(move || {
         let _ = child.wait();
     });
@@ -608,23 +561,25 @@ Exec=gnome-text-editor --new-window";
 
     #[test]
     fn fields_come_from_the_desktop_entry_group_only() {
-        assert_eq!(field(ENTRY, "Name"), Some("Text Editor"), "localised keys must not match");
-        assert_eq!(field(ENTRY, "Icon"), Some("org.gnome.TextEditor"));
-        assert_eq!(field(ENTRY, "Type"), Some("Application"));
-        // present only in the trailing action group, so invisible from here
-        assert_eq!(field(ENTRY, "Missing"), None);
-        assert!(!is_true(ENTRY, "NoDisplay"));
-        assert!(!is_true(ENTRY, "Hidden"), "an absent key is not true");
+        assert_eq!(desktop_field(ENTRY, "Name"), Some("Text Editor"), "localised keys must not match");
+        assert_eq!(desktop_field(ENTRY, "Icon"), Some("org.gnome.TextEditor"));
+        assert_eq!(desktop_field(ENTRY, "Type"), Some("Application"));
+        assert_eq!(desktop_field(ENTRY, "Missing"), None, "keys in a trailing action group are invisible");
+        assert!(!desktop_flag(ENTRY, "NoDisplay"));
+        assert!(!desktop_flag(ENTRY, "Hidden"), "an absent key is not true");
     }
 
     #[test]
     fn field_codes_are_stripped_from_exec() {
         assert_eq!(
-            exec_argv(field(ENTRY, "Exec").unwrap()),
+            exec_argv_without_field_codes(desktop_field(ENTRY, "Exec").unwrap()),
             ["gnome-text-editor", "--gapplication-service"]
         );
-        // %% is a literal percent, and a bare %-word is not a field code
-        assert_eq!(exec_argv("app %%x %f %ok"), ["app", "%%x", "%ok"]);
+        assert_eq!(
+            exec_argv_without_field_codes("app %%x %f %ok"),
+            ["app", "%%x", "%ok"],
+            "%% is a literal percent and a bare %-word is not a field code"
+        );
     }
 
     #[test]
@@ -643,7 +598,6 @@ Exec=gnome-text-editor --new-window";
 
     #[test]
     fn clipboard_files_ignores_non_file_uris() {
-        // what `clipboard_files` does to a uri-list, without a live clipboard
         let list = "https://example.com/cat.gif\nfile:///tmp/a%20b.txt\n";
         let files: Vec<String> = list
             .lines()
@@ -653,8 +607,6 @@ Exec=gnome-text-editor --new-window";
         assert_eq!(files, ["/tmp/a b.txt"]);
     }
 
-    /// The shadowing rule list_apps depends on, plus the entries that must
-    /// never be listed at all.
     #[test]
     fn desktop_entries_dedupe_by_id_and_skip_hidden_ones() {
         let root = std::env::temp_dir().join("launcher-desktop-scan-test");
@@ -686,7 +638,7 @@ Exec=gnome-text-editor --new-window";
 
     #[test]
     fn missing_tools_never_panic() {
-        assert!(!has("definitely-not-a-real-binary-name"));
+        assert!(!on_path("definitely-not-a-real-binary-name"));
         assert!(Linux.search_files("   ").is_empty());
         assert!(Linux.app_icon("/nonexistent.desktop").is_none());
     }

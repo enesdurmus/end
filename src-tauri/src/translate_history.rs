@@ -1,6 +1,3 @@
-//! Persisted translation history. Same shape as `clipboard.rs`, but entries are
-//! structs and dedupe is keyed on (source, to).
-
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -15,7 +12,6 @@ pub struct Entry {
 }
 
 pub fn push_capped(list: &mut Vec<Entry>, e: Entry, cap: usize) {
-    // same text to the same language is one entry, moved back to the front
     list.retain(|x| !(x.source == e.source && x.to == e.to));
     list.insert(0, e);
     if list.len() > cap {

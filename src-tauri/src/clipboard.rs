@@ -1,11 +1,3 @@
-//! Clipboard history: what an entry is, how entries are capped, and where the
-//! image blobs live.
-//!
-//! Text entries carry their content inline; an image entry carries only a path,
-//! because a screenshot is megabytes and the history file is read whole at
-//! startup. The PNG next to it is named after a hash of its pixels, so copying
-//! the same image twice is a dedupe hit rather than a second file on disk.
-
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -18,28 +10,22 @@ pub enum Clip {
         text: String,
     },
     Image {
-        /// Absolute path to the PNG in `images_dir`.
         path: String,
-        /// What the row is called — see `image_name`. Copied pixels have no
-        /// filename of their own, so this is a best effort, never empty.
         name: String,
         width: u32,
         height: u32,
         bytes: u64,
     },
-    /// Files copied in a file manager, as absolute paths.
     Files {
         paths: Vec<String>,
     },
 }
 
 impl Clip {
-    /// Identity for deduplication. Kind-prefixed so a text entry can never
-    /// collide with a file list that happens to have the same characters.
-    pub fn key(&self) -> String {
+    /// Kind-prefixed, so text can never collide with a file list of the same characters.
+    pub fn dedupe_key(&self) -> String {
         match self {
             Clip::Text { text } => format!("t:{text}"),
-            // the filename is a content hash, so equal pixels means equal path
             Clip::Image { path, .. } => format!("i:{path}"),
             Clip::Files { paths } => format!("f:{}", paths.join("\n")),
         }
@@ -53,29 +39,23 @@ impl Clip {
     }
 }
 
-/// Insert `item` at the front, deduped, then trim to the caps.
-///
-/// Images are capped separately from everything else: a hundred text snippets
-/// cost kilobytes, a hundred screenshots cost gigabytes. Returns the paths of
-/// images that fell off the end — deleting them is the caller's job, so this
-/// stays a pure function.
+/// Returns evicted image paths; deleting them is the caller's job.
 pub fn push_capped(
     list: &mut Vec<Clip>,
     item: Clip,
     text_cap: usize,
     image_cap: usize,
 ) -> Vec<String> {
-    if list.first().map(Clip::key) == Some(item.key()) {
+    if list.first().map(Clip::dedupe_key) == Some(item.dedupe_key()) {
         return Vec::new();
     }
-    let key = item.key();
-    // a re-copied entry moves to the front; its blob is reused, never evicted
-    list.retain(|c| c.key() != key);
+    let key = item.dedupe_key();
+    list.retain(|c| c.dedupe_key() != key);
     list.insert(0, item);
     trim(list, text_cap, image_cap)
 }
 
-/// Drop entries past their cap, newest-first. Returns evicted image paths.
+/// Returns evicted image paths; deleting them is the caller's job.
 pub fn trim(list: &mut Vec<Clip>, text_cap: usize, image_cap: usize) -> Vec<String> {
     let (mut texts, mut images) = (0usize, 0usize);
     let mut evicted = Vec::new();
@@ -98,15 +78,9 @@ pub fn trim(list: &mut Vec<Clip>, text_cap: usize, image_cap: usize) -> Vec<Stri
 
 const IMAGE_EXTS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"];
 
-/// Name a copied image, best effort, in order: the filename from the source URL
-/// the app put on the clipboard, then the app it was copied from, then a generic
-/// label.
-///
-/// The URL is only used when it actually names an image file. A browser that
-/// offers the *page* URL instead of the image's would otherwise title every row
-/// something like "index.html".
+/// Copied pixels carry no filename of their own.
 pub fn image_name(url: Option<&str>, app: Option<&str>) -> String {
-    if let Some(name) = url.and_then(file_name_of) {
+    if let Some(name) = image_file_name_of(url.unwrap_or_default()) {
         return name;
     }
     match app {
@@ -115,7 +89,8 @@ pub fn image_name(url: Option<&str>, app: Option<&str>) -> String {
     }
 }
 
-fn file_name_of(url: &str) -> Option<String> {
+/// `None` for a page URL: every row would be titled "index.html".
+fn image_file_name_of(url: &str) -> Option<String> {
     let path = url.split(['?', '#']).next()?;
     let name = path.rsplit('/').next()?;
     let ext = name.rsplit_once('.')?.1.to_ascii_lowercase();
@@ -125,8 +100,6 @@ fn file_name_of(url: &str) -> Option<String> {
         .filter(|n| !n.is_empty())
 }
 
-/// `my%20logo.png` -> `my logo.png`. Only ASCII escapes matter here; anything
-/// that doesn't parse is left as written rather than dropped.
 fn percent_decode(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
@@ -166,8 +139,12 @@ pub fn load(app_dir: &Path) -> Vec<Clip> {
     if let Ok(list) = serde_json::from_str::<Vec<Clip>>(&s) {
         return list;
     }
-    // history written before entries were typed: a flat array of strings
-    serde_json::from_str::<Vec<String>>(&s)
+    load_untyped_history(&s)
+}
+
+/// History written before entries had a kind: a flat array of strings.
+fn load_untyped_history(s: &str) -> Vec<Clip> {
+    serde_json::from_str::<Vec<String>>(s)
         .map(|v| v.into_iter().map(|text| Clip::Text { text }).collect())
         .unwrap_or_default()
 }
@@ -179,10 +156,7 @@ pub fn save(app_dir: &Path, list: &[Clip]) {
     }
 }
 
-/// Encode RGBA pixels to `<hash>.png` and return the entry describing them.
-///
-/// The hash is computed first: an image already on disk is the same image, so a
-/// re-copy costs a hash instead of a re-encode.
+/// Content-hashed, so re-copying an image costs a hash, not a second file.
 pub fn store_image(
     dir: &Path,
     rgba: &[u8],
@@ -195,8 +169,6 @@ pub fn store_image(
     rgba.hash(&mut h);
     width.hash(&mut h);
     height.hash(&mut h);
-    // ponytail: 64-bit non-cryptographic hash. It only has to tell two copied
-    // images apart, not resist an attacker; swap in sha2 if that ever changes.
     let path = dir.join(format!("{:016x}.png", h.finish()));
 
     let bytes = match std::fs::metadata(&path) {
@@ -227,8 +199,7 @@ fn encode_png(rgba: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-/// Delete PNGs no entry points at any more — eviction leftovers, and blobs
-/// orphaned by a crash between the image write and the history save.
+/// Also catches blobs orphaned by a crash between image write and history save.
 pub fn sweep_images(dir: &Path, list: &[Clip]) {
     let kept: Vec<&str> = list.iter().filter_map(Clip::image_path).collect();
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -295,14 +266,13 @@ mod tests {
         assert_eq!(evicted, vec!["/img/old.png"]);
     }
 
-    // Re-copying an image must not delete the file the surviving entry points at.
     #[test]
     fn re_copied_image_is_not_evicted() {
         let mut l = Vec::new();
         push_capped(&mut l, image("/img/a.png"), CAP, 2);
         push_capped(&mut l, text("x"), CAP, 2);
         let evicted = push_capped(&mut l, image("/img/a.png"), CAP, 2);
-        assert!(evicted.is_empty());
+        assert!(evicted.is_empty(), "the surviving entry still points at that file");
         assert_eq!(l, vec![image("/img/a.png"), text("x")]);
     }
 
@@ -313,8 +283,6 @@ mod tests {
         assert_eq!(image_name(Some("https://x.dev/A/LOGO.JPG"), None), "LOGO.JPG");
     }
 
-    // A page URL names a document, not an image; titling the row "index.html" or
-    // "pricing" would be worse than saying where it came from.
     #[test]
     fn an_image_falls_back_to_the_app_when_the_url_is_not_an_image() {
         assert_eq!(image_name(Some("https://x.dev/pricing"), Some("Safari")), "Safari");
@@ -326,11 +294,12 @@ mod tests {
 
     #[test]
     fn a_text_entry_never_collides_with_an_identical_file_list() {
-        assert_ne!(text("/a\n/b").key(), Clip::Files { paths: vec!["/a".into(), "/b".into()] }.key());
+        assert_ne!(
+            text("/a\n/b").dedupe_key(),
+            Clip::Files { paths: vec!["/a".into(), "/b".into()] }.dedupe_key()
+        );
     }
 
-    // The `Clip` union in src/types.ts is written against this exact shape; if the
-    // tag or a field name moves, the frontend silently renders nothing.
     #[test]
     fn entries_serialize_in_the_shape_the_frontend_expects() {
         let json = serde_json::to_string(&vec![
@@ -341,7 +310,8 @@ mod tests {
         .unwrap();
         assert_eq!(
             json,
-            r#"[{"kind":"text","text":"hi"},{"kind":"image","path":"/i/a.png","name":"logo.png","width":2,"height":1,"bytes":9},{"kind":"files","paths":["/d/a.txt"]}]"#
+            r#"[{"kind":"text","text":"hi"},{"kind":"image","path":"/i/a.png","name":"logo.png","width":2,"height":1,"bytes":9},{"kind":"files","paths":["/d/a.txt"]}]"#,
+            "the Clip union in src/types.ts is written against this exact shape"
         );
     }
 
@@ -364,11 +334,10 @@ mod tests {
         assert_eq!(first, second);
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
 
-        // and the bytes on disk are a real PNG of the right size
         let Clip::Image { path, width, height, bytes, .. } = &first else { panic!("not an image") };
         assert_eq!((*width, *height), (2, 2));
         assert_eq!(*bytes, std::fs::metadata(path).unwrap().len());
-        assert_eq!(&std::fs::read(path).unwrap()[..8], b"\x89PNG\r\n\x1a\n");
+        assert_eq!(&std::fs::read(path).unwrap()[..8], b"\x89PNG\r\n\x1a\n", "a real PNG header");
 
         sweep_images(&dir, &[]);
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);

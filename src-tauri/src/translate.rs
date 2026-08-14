@@ -1,6 +1,3 @@
-//! Translation backend. Providers are a closed set: adding one means adding a
-//! `Provider` variant, a `match` arm in `fetch`, and its own request function.
-
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -10,8 +7,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
-// Built once and reused: a fresh `reqwest::Client` per call would open a new
-// connection pool and redo the TLS handshake on every debounce tick.
+/// Reused so a debounce tick does not redo the TLS handshake.
 fn client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
@@ -26,7 +22,6 @@ fn client() -> &'static reqwest::Client {
 pub enum Provider {
     #[default]
     Google,
-    // Yandex,  // new engine: add the variant, a `match` arm below, and a fetch fn
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -58,8 +53,7 @@ async fn google(text: &str, from: &str, to: &str) -> Result<Translation, String>
         ])
         .send()
         .await
-        // reqwest's Display appends " for url (...)", and the url contains the
-        // user's typed text as a query param — never surface it to the UI.
+        // reqwest's Display appends the url, which carries the user's text
         .map_err(|_| "translation request failed".to_string())?;
 
     let status = resp.status();
@@ -74,8 +68,6 @@ async fn google(text: &str, from: &str, to: &str) -> Result<Translation, String>
     parse_google(&body)
 }
 
-// Pure so it's testable without a network call: maps a failing status to a
-// short, human-readable message that never contains request/response data.
 fn status_error_message(status: reqwest::StatusCode) -> String {
     if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
         "translation rate limit reached, try again shortly".to_string()
@@ -84,9 +76,7 @@ fn status_error_message(status: reqwest::StatusCode) -> String {
     }
 }
 
-// The endpoint answers with a bare nested array:
-//   [[["hello","merhaba",..],["world","dünya",..]], null, "tr", ...]
-// -> translated text = concat of [0][i][0], detected language = [2]
+/// `[[["hello","merhaba",..],["world","dünya",..]], null, "tr", ...]`
 pub fn parse_google(body: &str) -> Result<Translation, String> {
     let v: serde_json::Value =
         serde_json::from_str(body).map_err(|e| format!("bad translate response: {e}"))?;

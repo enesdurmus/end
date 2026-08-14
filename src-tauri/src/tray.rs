@@ -1,5 +1,3 @@
-//! System tray icon and its menu (Preferences / Quit).
-
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, Runtime};

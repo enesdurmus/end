@@ -1,13 +1,10 @@
-//! Window lifecycle wiring: hide the launcher on blur, keep Preferences alive on close.
-
 use tauri::{AppHandle, Manager, Runtime, WindowEvent};
 
 pub fn wire<R: Runtime>(app: &AppHandle<R>) {
     let main = app.get_webview_window("main").unwrap();
     let main2 = main.clone();
     main.on_window_event(move |e| {
-        // Hide only — deliberately not focus::hide. Losing focus means the user
-        // already moved somewhere else; restoring focus here would yank them back.
+        // not focus::hide: the user already moved somewhere else
         if let WindowEvent::Focused(false) = e {
             let _ = main2.hide();
         }

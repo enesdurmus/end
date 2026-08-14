@@ -1,4 +1,4 @@
-use super::{b64, AppEntry, Platform};
+use super::{base64_encode, AppEntry, Platform};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2_app_kit::{NSApplicationActivationOptions, NSPasteboard, NSRunningApplication};
@@ -14,14 +14,17 @@ use std::process::{Command, Stdio};
 
 pub struct MacOs;
 
+const MAX_SEARCH_RESULTS: usize = 20;
+const MAX_ASNS_INSPECTED: usize = 5;
+
 impl Platform for MacOs {
     fn list_apps(&self) -> Vec<AppEntry> {
         let mut out = Vec::new();
-        scan(PathBuf::from("/Applications"), &mut out);
-        scan(PathBuf::from("/System/Applications"), &mut out);
-        scan(PathBuf::from("/System/Applications/Utilities"), &mut out);
+        scan_apps(PathBuf::from("/Applications"), &mut out);
+        scan_apps(PathBuf::from("/System/Applications"), &mut out);
+        scan_apps(PathBuf::from("/System/Applications/Utilities"), &mut out);
         if let Some(home) = std::env::var_os("HOME") {
-            scan(PathBuf::from(home).join("Applications"), &mut out);
+            scan_apps(PathBuf::from(home).join("Applications"), &mut out);
         }
         out.sort_by_key(|a| a.name.to_lowercase());
         out
@@ -47,7 +50,7 @@ impl Platform for MacOs {
             }
         }
         let bytes = fs::read(&png).ok()?;
-        Some(format!("data:image/png;base64,{}", b64(&bytes)))
+        Some(format!("data:image/png;base64,{}", base64_encode(&bytes)))
     }
 
     fn open_path(&self, path: &str) -> Result<(), String> {
@@ -58,12 +61,12 @@ impl Platform for MacOs {
         if query.trim().is_empty() {
             return Vec::new();
         }
-        // ponytail: mdfind can return tens of thousands of lines for common words;
-        // stream stdout and stop at the first 20 → child dies via SIGPIPE.
-        let mut child = match Command::new("mdfind").arg("-name").arg(query).stdout(Stdio::piped()).spawn() {
-            Ok(c) => c,
-            Err(_) => return Vec::new(),
-        };
+        // mdfind can return tens of thousands of lines, so stream and kill it early
+        let mut child =
+            match Command::new("mdfind").arg("-name").arg(query).stdout(Stdio::piped()).spawn() {
+                Ok(c) => c,
+                Err(_) => return Vec::new(),
+            };
         let reader = match child.stdout.take() {
             Some(o) => BufReader::new(o),
             None => return Vec::new(),
@@ -71,7 +74,7 @@ impl Platform for MacOs {
         let out: Vec<AppEntry> = reader
             .lines()
             .map_while(Result::ok)
-            .take(20)
+            .take(MAX_SEARCH_RESULTS)
             .map(|path| {
                 let name = std::path::Path::new(&path)
                     .file_name()
@@ -86,22 +89,17 @@ impl Platform for MacOs {
         out
     }
 
-    // `lsappinfo front` cannot answer this: once the launcher is the active app it just
-    // returns us. visibleProcessList is front-to-back activation order, so the answer is
-    // the first entry that isn't us.
-    //
-    // ponytail: lsappinfo (~10ms, no Automation permission) instead of osascript+System
-    // Events (~400ms). Blocks the shortcut path, so it must stay fast — hence the take(5),
-    // since each ASN costs another call and the answer is realistically 1st or 2nd.
-    fn app_behind(&self, own: &str) -> Option<String> {
+    fn frontmost_app_other_than(&self, own: &str) -> Option<String> {
+        // `lsappinfo front` would answer "us" once we are active; this list is
+        // front-to-back, and each ASN costs another call
         let out = Command::new("lsappinfo").arg("visibleProcessList").output().ok()?;
         let list = String::from_utf8_lossy(&out.stdout);
-        asns(&list).iter().take(5).filter_map(|asn| bundle_id(asn)).find(|id| id != own)
+        asns(&list).iter().take(MAX_ASNS_INSPECTED).filter_map(|asn| bundle_id(asn)).find(|id| id != own)
     }
 
     fn restore_focus(&self, prev: Option<String>) {
         if let Some(app) = prev.as_deref().and_then(running) {
-            request_activation_of(&app);
+            activate(&app);
         }
     }
 
@@ -110,7 +108,7 @@ impl Platform for MacOs {
             return;
         };
         let pid = app.processIdentifier();
-        request_activation_of(&app);
+        activate(&app);
         if pid != NO_PID {
             send_paste(pid, paste_key());
         }
@@ -140,17 +138,13 @@ impl Platform for MacOs {
         items
             .iter()
             .filter_map(|item| item.stringForType(&ty))
-            // NSURL decodes the percent-escapes a file URL carries, so a path with
-            // spaces comes back usable instead of as %20
             .filter_map(|s| NSURL::URLWithString(&s))
             .filter_map(|url| url.path().map(|p| p.to_string()))
             .collect()
     }
 
-    fn clipboard_url(&self) -> Option<String> {
+    fn clipboard_source_url(&self) -> Option<String> {
         let pb = NSPasteboard::generalPasteboard();
-        // Not `public.file-url`: a copied file is a Files entry already, and its
-        // path would be a misleading name for pixels copied from somewhere else.
         let s = pb.stringForType(&NSString::from_str("public.url"))?.to_string();
         (!s.is_empty()).then_some(s)
     }
@@ -164,7 +158,6 @@ impl Platform for MacOs {
     }
 
     fn accessibility_granted(&self) -> bool {
-        // ponytail: AXIsProcessTrusted is one FFI call, not worth a crate
         unsafe { AXIsProcessTrusted() }
     }
 
@@ -182,13 +175,16 @@ extern "C" {
     fn AXIsProcessTrusted() -> bool;
 }
 
-fn scan(dir: PathBuf, out: &mut Vec<AppEntry>) {
+fn scan_apps(dir: PathBuf, out: &mut Vec<AppEntry>) {
     if let Ok(entries) = fs::read_dir(&dir) {
         for e in entries.flatten() {
             let p = e.path();
             if p.extension().is_some_and(|x| x == "app") {
                 if let Some(name) = p.file_stem().and_then(|s| s.to_str()) {
-                    out.push(AppEntry { name: name.to_string(), path: p.to_string_lossy().to_string() });
+                    out.push(AppEntry {
+                        name: name.to_string(),
+                        path: p.to_string_lossy().to_string(),
+                    });
                 }
             }
         }
@@ -216,7 +212,6 @@ fn find_icns(app_path: &str) -> Option<PathBuf> {
             }
         }
     }
-    // fallback: first .icns in Resources
     fs::read_dir(&res)
         .ok()?
         .flatten()
@@ -224,31 +219,28 @@ fn find_icns(app_path: &str) -> Option<PathBuf> {
         .find(|p| p.extension().is_some_and(|x| x == "icns"))
 }
 
-/// Pulls the ASNs out of a `lsappinfo visibleProcessList` line, front-to-back.
-/// Entries look like `ASN:0x0-0x19019-"WezTerm":`.
+/// `ASN:0x0-0x19019-"WezTerm":` -> `ASN:0x0-0x19019`
 fn asns(list: &str) -> Vec<String> {
     list.split_whitespace()
         .filter_map(|e| e.split_once("-\"").map(|(asn, _)| asn.to_string()))
         .collect()
 }
 
+/// `"CFBundleIdentifier"="com.foo.bar"` -> `com.foo.bar`
 fn bundle_id(asn: &str) -> Option<String> {
     let out = Command::new("lsappinfo").args(["info", "-only", "bundleid", asn]).output().ok()?;
-    // output looks like: "CFBundleIdentifier"="com.foo.bar"
     let line = String::from_utf8_lossy(&out.stdout);
     let id = line.rsplit('=').next()?.trim().trim_matches('"').to_string();
     Some(id).filter(|id| !id.is_empty())
 }
 
 const PASTE_CHAR: u16 = b'v' as u16;
-const ANSI_PASTE_KEY: CGKeyCode = 9; // kVK_ANSI_V
+const KVK_ANSI_V: CGKeyCode = 9;
 const NO_PID: c_int = -1;
 
-/// Main thread only: HIToolbox traps the process anywhere else, and only inside a real
-/// NSApplication — no test can reach it.
 fn paste_key() -> CGKeyCode {
     debug_assert!(NSThread::isMainThread_class(), "paste_key touches HIToolbox; main thread only");
-    paste_key_in_current_layout().unwrap_or(ANSI_PASTE_KEY)
+    paste_key_in_current_layout().unwrap_or(KVK_ANSI_V)
 }
 
 /// A CGEvent carries a key position, and `v` moves with the layout (Dvorak, Turkish-F).
@@ -260,7 +252,6 @@ fn paste_key_in_current_layout() -> Option<CGKeyCode> {
         }
         let data = TISGetInputSourceProperty(src, kTISPropertyUnicodeKeyLayoutData);
         let layout = if data.is_null() { std::ptr::null() } else { CFDataGetBytePtr(data) };
-        // `layout` is owned by `src`.
         let found = (!layout.is_null())
             .then(|| (0..128).find(|&code| types_paste_char(layout, code)))
             .flatten();
@@ -270,18 +261,18 @@ fn paste_key_in_current_layout() -> Option<CGKeyCode> {
 }
 
 unsafe fn types_paste_char(layout: *const u8, code: CGKeyCode) -> bool {
-    const ACTION_DISPLAY: u16 = 3; // kUCKeyActionDisplay
-    const NO_DEAD_KEYS: u32 = 1; // 1 << kUCKeyTranslateNoDeadKeysBit
+    const KUC_KEY_ACTION_DISPLAY: u16 = 3;
+    const KUC_KEY_TRANSLATE_NO_DEAD_KEYS: u32 = 1;
     let mut dead = 0u32;
     let mut len: c_ulong = 0;
     let mut buf = [0u16; 4];
     let status = UCKeyTranslate(
         layout,
         code,
-        ACTION_DISPLAY,
+        KUC_KEY_ACTION_DISPLAY,
         0,
         LMGetKbdType() as u32,
-        NO_DEAD_KEYS,
+        KUC_KEY_TRANSLATE_NO_DEAD_KEYS,
         &mut dead,
         buf.len() as c_ulong,
         &mut len,
@@ -317,10 +308,10 @@ extern "C" {
     fn CFRelease(cf: *mut c_void);
 }
 
-/// Only counts while the launcher is still the active app: macOS parks a request from a
+/// Only counts while we are still the active app: macOS parks a request from a
 /// background process in LaunchServices for a full second.
-fn request_activation_of(app: &NSRunningApplication) {
-    #[allow(deprecated)] // `activate()` alone is macOS 14+; we still support older
+fn activate(app: &NSRunningApplication) {
+    #[allow(deprecated)] // `activate()` alone is macOS 14+
     app.activateWithOptions(NSApplicationActivationOptions::ActivateIgnoringOtherApps);
 }
 
@@ -343,13 +334,13 @@ fn send_paste(pid: c_int, key: CGKeyCode) {
 mod tests {
     use super::{asns, MacOs, Platform};
 
+    const VISIBLE_PROCESS_LIST: &str = "ASN:0x0-0x19019-\"WezTerm\": ASN:0x0-0x53053-\"Firefox\": \
+         ASN:0x0-0x367367-\"Launcher\": ASN:0x0-0x2c02c-\"Finder\":";
+
     #[test]
     fn asns_are_parsed_front_to_back() {
-        // verbatim `lsappinfo visibleProcessList` output
-        let list = "ASN:0x0-0x19019-\"WezTerm\": ASN:0x0-0x53053-\"Firefox\": \
-                    ASN:0x0-0x367367-\"Launcher\": ASN:0x0-0x2c02c-\"Finder\":";
         assert_eq!(
-            asns(list),
+            asns(VISIBLE_PROCESS_LIST),
             ["ASN:0x0-0x19019", "ASN:0x0-0x53053", "ASN:0x0-0x367367", "ASN:0x0-0x2c02c"]
         );
     }
@@ -360,10 +351,12 @@ mod tests {
         assert!(asns("garbage without quotes").is_empty());
     }
 
-    /// Not `== ANSI_PASTE_KEY`: that only holds on QWERTY-family layouts.
     #[test]
     fn the_active_layout_yields_a_paste_key() {
-        assert!(super::paste_key_in_current_layout().is_some());
+        assert!(
+            super::paste_key_in_current_layout().is_some(),
+            "not KVK_ANSI_V: that only holds on QWERTY-family layouts"
+        );
     }
 
     #[test]
@@ -371,11 +364,9 @@ mod tests {
         assert!(super::running("com.example.definitely-not-running").is_none());
     }
 
-    // Ignored by default: it overwrites the real clipboard of whoever runs the
-    // suite. Run with `cargo test -- --ignored`.
-    //
-    // One test rather than three, because the general pasteboard is global state
-    // and cargo runs tests in parallel — separate tests clobber each other.
+    /// Overwrites the real clipboard, so it is ignored by default: run with
+    /// `cargo test -- --ignored`. One test rather than three, because the general
+    /// pasteboard is global state and cargo runs tests in parallel.
     #[test]
     #[ignore]
     fn files_round_trip_through_the_pasteboard() {
@@ -390,8 +381,6 @@ mod tests {
             Some("file:///tmp/launcher-copy-file-test.gif")
         );
 
-        // What the watcher relies on: copied files come back as decoded absolute
-        // paths, and the change counter moves when the clipboard does.
         let paths = vec![
             "/tmp/launcher clip test/a b.txt".to_string(),
             "/tmp/launcher clip test/c.txt".to_string(),
@@ -401,9 +390,7 @@ mod tests {
         assert_eq!(MacOs.clipboard_files(), paths, "percent-escapes must be decoded");
         assert!(MacOs.clipboard_change_count().unwrap() > before);
 
-        // and plain text is not mistaken for a file list
         arboard::Clipboard::new().unwrap().set_text("just text").unwrap();
-        assert!(MacOs.clipboard_files().is_empty());
+        assert!(MacOs.clipboard_files().is_empty(), "plain text is not a file list");
     }
 }
-

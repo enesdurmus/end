@@ -1,5 +1,3 @@
-//! Global-shortcut registration and the key-press handler.
-
 use std::error::Error;
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -35,7 +33,6 @@ pub fn on_press<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, event: Shor
     let is_clipboard = *shortcut == *state.clipboard.lock().unwrap();
     let w = app.get_webview_window("main").unwrap();
 
-    // The frontend calls show_launcher once it has switched screens.
     if is_toggle {
         if w.is_visible().unwrap_or(false) {
             focus::hide(app);
