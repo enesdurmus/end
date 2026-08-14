@@ -1,13 +1,7 @@
-//! Linux backend.
-//!
-//! Two display servers, so most calls pick a mechanism at runtime:
-//! X11 gets window focus and key synthesis via `xdotool`, Wayland has no
-//! portable equivalent for either (a client may not focus itself or read another
-//! window's identity), so focus handoff there is left to the compositor and only
-//! the keystroke is synthesised, via `wtype`/`ydotool`.
-//!
-//! Everything that shells out degrades to "nothing found" when the tool is
-//! missing — the launcher still runs on a bare system, it just pastes nothing.
+//! Linux backend. Mechanisms are picked at runtime: X11 has `xdotool` for focus
+//! and keys, Wayland lets a client do neither, so focus is left to the
+//! compositor and only the keystroke is synthesised. A missing helper degrades
+//! that one feature; nothing here panics or hard-fails.
 
 use super::{b64, AppEntry, Platform};
 use std::fs;
@@ -24,8 +18,8 @@ impl Platform for Linux {
     fn list_apps(&self) -> Vec<AppEntry> {
         let mut seen = std::collections::HashSet::new();
         let mut out = Vec::new();
-        // XDG order is significant: the first file with a given id wins, so a
-        // user's ~/.local/share override shadows the system one.
+        // XDG order: the first file with a given id wins, so ~/.local/share
+        // shadows the system entry.
         for dir in data_dirs() {
             let apps = dir.join("applications");
             collect_desktop_entries(&apps, &apps, 3, &mut seen, &mut out);
@@ -36,7 +30,7 @@ impl Platform for Linux {
 
     fn app_icon(&self, app_path: &str) -> Option<String> {
         let icon = field(&fs::read_to_string(app_path).ok()?, "Icon")?.to_string();
-        // An absolute Icon= is rare but legal, and skips the theme search.
+        // an absolute Icon= is legal, and skips the theme search
         let file = if icon.starts_with('/') {
             PathBuf::from(&icon)
         } else {
@@ -57,9 +51,7 @@ impl Platform for Linux {
         if query.is_empty() {
             return Vec::new();
         }
-        // ponytail: the system index (plocate/locate) when it exists, otherwise a
-        // shallow walk of $HOME. No index means no results for /usr or other
-        // volumes — install plocate for those.
+        // ponytail: no index installed means no results outside $HOME.
         match ["plocate", "locate"].into_iter().find(|b| has(b)) {
             Some(bin) => Command::new(bin)
                 .args(["-i", "-l", "20", "--", query])
@@ -76,17 +68,15 @@ impl Platform for Linux {
             return None; // no Wayland client may ask who else is focused
         }
         let id = xdotool(&["getactivewindow"])?;
-        // Excluding ourselves is the point of the call, and the window id says
-        // nothing about who owns it — the pid does.
+        // excluding ourselves is the point, and only the pid can say
         let pid = xdotool(&["getwindowpid", &id])?;
         (pid != std::process::id().to_string()).then_some(id)
     }
 
     fn restore_focus(&self, prev: Option<String>) {
         if let Some(id) = prev {
-            // Deliberately not --sync: this runs on the main thread, and --sync
-            // blocks until the window really activates — which never happens if
-            // it closed meanwhile, freezing the UI.
+            // not --sync: it blocks until the window activates, which never
+            // happens if it closed meanwhile — and this is the main thread.
             xdotool(&["windowactivate", &id]);
         }
     }
@@ -94,10 +84,8 @@ impl Platform for Linux {
     fn paste(&self, prev: Option<String>) {
         self.restore_focus(prev);
         let Some(key) = key_tool() else { return };
-        // Unlike macOS, where the event is posted to a target pid, a synthesised
-        // key here goes wherever focus is — and focus only leaves us once the
-        // caller hides our window, right after this returns. So the keystroke
-        // waits out that hand-off on a thread instead of racing it.
+        // The key goes wherever focus is, and focus only leaves us once the
+        // caller hides our window — right after this returns. So wait it out.
         std::thread::spawn(move || {
             std::thread::sleep(paste_delay());
             key.press_paste();
@@ -106,10 +94,8 @@ impl Platform for Linux {
 
     fn copy_files(&self, paths: &[String]) -> Result<(), String> {
         let uris: String = paths.iter().map(|p| format!("{}\n", file_uri(p))).collect();
-        // text/uri-list is what GTK/Qt apps read for "these files were copied".
-        // ponytail: file managers that want x-special/gnome-copied-files (to tell
-        // copy from cut) won't see this as a paste-able file — one clipboard
-        // owner can only be started with one target per helper process.
+        // ponytail: text/uri-list only, since one helper process can own one
+        // target — file managers wanting x-special/gnome-copied-files see nothing.
         match backend() {
             Clip::Wl => feed(Command::new("wl-copy").args(["--type", "text/uri-list"]), &uris),
             Clip::X11 => feed(
@@ -130,30 +116,28 @@ impl Platform for Linux {
     }
 
     fn clipboard_url(&self) -> Option<String> {
-        // Only a non-file URI: a copied file is a Files entry already, and its
-        // path would be a misleading name for pixels copied from somewhere else.
+        // Not a file URI: that is a Files entry already, and its path would be a
+        // misleading name for pixels copied from somewhere else.
         let list = uri_list();
         let first = list.lines().find(|l| !l.trim().is_empty())?.trim();
         (!first.starts_with("file://")).then(|| first.to_string())
     }
 
     fn app_name(&self, window_id: &str) -> Option<String> {
-        // `app_behind` hands back a window id here, not a bundle id.
+        // `app_behind` hands back a window id, not a bundle id
         xdotool(&["getwindowclassname", window_id])
     }
 
     fn clipboard_change_count(&self) -> Option<u64> {
-        // Only Wayland offers a change *event* (`wl-paste --watch`); X11 has no
-        // counter and no notification without an extension client, so it gets the
-        // read-every-tick path the trait documents.
+        // Only Wayland has a change event to count; X11 gets the read-every-tick
+        // path the trait documents.
         let n = wl_change_counter()?.load(Ordering::Relaxed);
         (n != COUNTER_DEAD).then_some(n)
     }
 
     fn accessibility_granted(&self) -> bool {
-        // No permission gate exists here; what actually decides whether pasting
-        // works is whether an input-synthesis tool is installed, and that is the
-        // question the UI is really asking.
+        // No permission gate exists here, so answer what the UI is really
+        // asking: can we synthesise a keystroke at all.
         key_tool().is_some()
     }
 
@@ -165,7 +149,6 @@ impl Platform for Linux {
     }
 }
 
-// ---------------------------------------------------------------- environment
 
 fn wayland() -> bool {
     static W: OnceLock<bool> = OnceLock::new();
@@ -192,18 +175,17 @@ fn data_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-/// A binary on `$PATH`. Scanned rather than shelled out to `which`, since this
-/// sits on the paste path.
+/// A binary on `$PATH`, scanned rather than shelled out to `which` — this sits
+/// on the paste path.
 fn has(bin: &str) -> bool {
     std::env::var_os("PATH")
         .map(|path| std::env::split_paths(&path).any(|d| d.join(bin).is_file()))
         .unwrap_or(false)
 }
 
-// ------------------------------------------------------------- desktop entries
 
 /// The value of `key` in the `[Desktop Entry]` group. Localised variants
-/// (`Name[tr]`) are deliberately not matched — the key must be exactly `key`.
+/// (`Name[tr]`) deliberately don't match.
 fn field<'a>(text: &'a str, key: &str) -> Option<&'a str> {
     text.lines()
         .skip_while(|l| l.trim() != "[Desktop Entry]")
@@ -219,8 +201,8 @@ fn is_true(text: &str, key: &str) -> bool {
     field(text, key) == Some("true")
 }
 
-/// Walks `dir` for `*.desktop`, deduped by id (path relative to `root`, the way
-/// the spec defines it) so an earlier XDG dir shadows a later one.
+/// Walks `dir` for `*.desktop`, deduped by spec id (the path relative to
+/// `root`), so an earlier XDG dir shadows a later one.
 fn collect_desktop_entries(
     dir: &Path,
     root: &Path,
@@ -262,8 +244,7 @@ fn collect_desktop_entries(
 }
 
 fn launch_desktop(path: &str) -> Result<(), String> {
-    // `gio launch` is the only thing that applies the entry properly (field
-    // codes, Terminal=, D-Bus activation); Exec= by hand is the fallback.
+    // only gio applies the entry properly: field codes, Terminal=, D-Bus activation
     if has("gio") {
         return detach(Command::new("gio").arg("launch").arg(path));
     }
@@ -276,8 +257,8 @@ fn launch_desktop(path: &str) -> Result<(), String> {
 
 /// `Exec=` minus its field codes (`%f`, `%U`, …) — we launch with no arguments.
 ///
-/// ponytail: quoted arguments containing spaces come apart here; `gio launch`
-/// handles those and is tried first.
+/// ponytail: quoted arguments with spaces come apart here; gio, tried first,
+/// handles them.
 fn exec_argv(exec: &str) -> Vec<String> {
     exec.split_whitespace()
         .filter(|t| !(t.starts_with('%') && t.len() == 2))
@@ -285,16 +266,12 @@ fn exec_argv(exec: &str) -> Vec<String> {
         .collect()
 }
 
-// ---------------------------------------------------------------------- icons
 
-/// The freedesktop icon lookup, flattened into a candidate list: themes worth
-/// trying, crossed with both directory layouts in the wild
-/// (`theme/48x48/apps/x.png` and `theme/apps/48/x.png`), plus the legacy
-/// pixmaps dirs.
+/// Freedesktop icon lookup as a flat candidate list, covering both layouts in
+/// the wild (`theme/48x48/apps/x.png`, `theme/apps/48/x.png`) plus pixmaps.
 ///
-/// ponytail: no index.theme parsing and no Inherits= chain — the fixed theme
-/// list below covers what ships on real desktops, and every miss falls through
-/// to hicolor, which the spec requires every icon to also live in.
+/// ponytail: no index.theme and no Inherits= chain — misses fall through to
+/// hicolor, which the spec requires every icon to live in anyway.
 fn find_icon(name: &str) -> Option<PathBuf> {
     const SIZES: [&str; 7] = ["64x64", "48x48", "128x128", "256x256", "32x32", "scalable", "symbolic"];
     const EXTS: [&str; 2] = ["png", "svg"];
@@ -314,9 +291,8 @@ fn find_icon(name: &str) -> Option<PathBuf> {
             continue;
         }
         for theme in &themes {
-            // Pruning at the theme dir keeps a miss to a handful of stats instead
-            // of the full cross product — every app row asks for an icon, and most
-            // themes in the list don't exist on any given machine.
+            // pruning here keeps a miss to a few stats instead of the whole
+            // cross product, and every app row asks for an icon
             let dir = base.join(theme);
             if !dir.is_dir() {
                 continue;
@@ -356,27 +332,26 @@ fn user_icon_theme() -> Option<String> {
     .clone()
 }
 
-/// SVG goes to the webview as-is: it renders vectors, so there is nothing to
-/// rasterise and no reason to depend on something that can.
+/// SVG goes to the webview as-is — it renders vectors, so nothing here needs a
+/// rasteriser.
 fn icon_data_uri(file: &Path) -> Option<String> {
     let mime = match file.extension()?.to_str()? {
         "png" => "image/png",
         "svg" => "image/svg+xml",
-        _ => return None, // .xpm — nothing renders it, and nothing modern ships it
+        _ => return None, // .xpm: nothing renders it, nothing modern ships it
     };
     Some(format!("data:{mime};base64,{}", b64(&fs::read(file).ok()?)))
 }
 
-// ------------------------------------------------------------- file searching
 
 fn entry_for(path: &str) -> AppEntry {
     let name = Path::new(path).file_name().and_then(|s| s.to_str()).unwrap_or(path);
     AppEntry { name: name.to_string(), path: path.to_string() }
 }
 
-/// Breadth-first so the shallow, likely matches come first; bounded in depth,
-/// results *and* directories visited, because this runs per keystroke and a home
-/// directory with a few node_modules in it is effectively unbounded.
+/// Breadth-first, so shallow matches come first. Bounded in depth, results and
+/// directories visited: this runs per keystroke, and a home directory with a
+/// node_modules in it is effectively unbounded.
 fn walk_home(needle: &str) -> Vec<AppEntry> {
     const MAX_DEPTH: usize = 3;
     const MAX_RESULTS: usize = 20;
@@ -395,7 +370,7 @@ fn walk_home(needle: &str) -> Vec<AppEntry> {
             for e in entries.flatten() {
                 let name = e.file_name().to_string_lossy().to_string();
                 if name.starts_with('.') {
-                    continue; // dotfiles aren't what anyone is searching for
+                    continue;
                 }
                 if name.to_lowercase().contains(needle) {
                     out.push(entry_for(&e.path().to_string_lossy()));
@@ -413,7 +388,6 @@ fn walk_home(needle: &str) -> Vec<AppEntry> {
     out
 }
 
-// ------------------------------------------------------------------ clipboard
 
 enum Clip {
     Wl,
@@ -421,12 +395,10 @@ enum Clip {
     None,
 }
 
-/// Which clipboard helper to talk to, decided once.
-///
-/// Wayland alone isn't enough: `wl-clipboard` needs the wlr/ext data-control
-/// protocol, which some compositors (GNOME's Mutter, historically) don't
-/// implement. Where it's missing, XWayland bridges the clipboard and `xclip`
-/// works — so the probe below decides by asking, not by guessing.
+/// Which clipboard helper to talk to, decided once. A Wayland session isn't
+/// enough on its own: `wl-clipboard` needs the data-control protocol, which
+/// Mutter historically lacks — there XWayland bridges the clipboard and `xclip`
+/// works, so the probe asks rather than guesses.
 fn backend() -> &'static Clip {
     static B: OnceLock<Clip> = OnceLock::new();
     B.get_or_init(|| {
@@ -450,12 +422,10 @@ fn wl_data_control_works() -> bool {
 }
 
 fn feed(cmd: &mut Command, data: &str) -> Result<(), String> {
-    // wl-copy and xclip both daemonize: the process we spawn forks the one that
-    // will serve the selection and exits straight away. So the write hands the
-    // data over, and the reaper thread collects a corpse that is already there —
-    // every copy would otherwise leave a zombie behind.
+    // Both helpers daemonize, so the child we spawn forks the process that will
+    // serve the selection and exits at once. Reaping it keeps every copy from
+    // leaving a zombie; dropping stdin below is what sends EOF.
     let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::null()).spawn().map_err(|e| e.to_string())?;
-    // taking stdin and dropping it at the end of this statement is what sends EOF
     child.stdin.take().ok_or("no stdin")?.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
     std::thread::spawn(move || {
         let _ = child.wait();
@@ -480,9 +450,8 @@ fn uri_list() -> String {
 /// Sentinel for "the watcher died, go back to polling" — a real count starts at 1.
 const COUNTER_DEAD: u64 = 0;
 
-/// A counter fed by `wl-paste --watch`, which turns the 500ms poll into an
-/// atomic load: nothing is read, and a multi-megabyte screenshot is never
-/// decoded twice.
+/// A counter fed by `wl-paste --watch`, turning the 500ms poll into an atomic
+/// load: nothing is read, and a big screenshot is never decoded twice.
 fn wl_change_counter() -> Option<&'static AtomicU64> {
     static C: OnceLock<Option<&'static AtomicU64>> = OnceLock::new();
     *C.get_or_init(|| {
@@ -547,7 +516,6 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-// -------------------------------------------------------------- focus & keys
 
 fn xdotool(args: &[&str]) -> Option<String> {
     let out = Command::new("xdotool").args(args).output().ok()?;
@@ -577,7 +545,7 @@ impl Key {
                 c.args(["-M", "ctrl", "v", "-m", "ctrl"]);
                 c
             }
-            // ydotool speaks keycodes, not names: 29 = leftctrl, 47 = v.
+            // ydotool speaks keycodes: 29 = leftctrl, 47 = v
             Key::Ydotool => {
                 let mut c = Command::new("ydotool");
                 c.args(["key", "29:1", "47:1", "47:0", "29:0"]);
@@ -588,8 +556,8 @@ impl Key {
     }
 }
 
-/// Wayland prefers a native tool but falls back to xdotool: under XWayland that
-/// still reaches every X11 client, which is most of them.
+/// Wayland falls back to xdotool: under XWayland it still reaches X11 clients,
+/// which is most of them.
 fn key_tool() -> Option<Key> {
     let candidates: [(&str, Key); 3] = if wayland() {
         [("wtype", Key::Wtype), ("ydotool", Key::Ydotool), ("xdotool", Key::Xdotool)]
@@ -600,7 +568,7 @@ fn key_tool() -> Option<Key> {
 }
 
 /// How long to wait for focus to leave us before sending Ctrl+V. Compositors
-/// differ, so it's a knob: `LAUNCHER_PASTE_DELAY_MS`.
+/// differ, hence the knob.
 fn paste_delay() -> Duration {
     static D: OnceLock<Duration> = OnceLock::new();
     *D.get_or_init(|| {
@@ -612,8 +580,7 @@ fn paste_delay() -> Duration {
     })
 }
 
-/// Spawn without leaving a zombie: the child is reaped on a thread, which for
-/// `xdg-open`/`gio launch` ends almost immediately.
+/// Spawn without leaving a zombie behind.
 fn detach(cmd: &mut Command) -> Result<(), String> {
     let mut child = cmd.stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| e.to_string())?;
     std::thread::spawn(move || {
@@ -686,8 +653,8 @@ Exec=gnome-text-editor --new-window";
         assert_eq!(files, ["/tmp/a b.txt"]);
     }
 
-    /// The shadowing rule list_apps depends on: same id in two XDG dirs, the
-    /// first one wins — plus the entries that must never be listed at all.
+    /// The shadowing rule list_apps depends on, plus the entries that must
+    /// never be listed at all.
     #[test]
     fn desktop_entries_dedupe_by_id_and_skip_hidden_ones() {
         let root = std::env::temp_dir().join("launcher-desktop-scan-test");
