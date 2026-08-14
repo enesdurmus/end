@@ -86,6 +86,7 @@ pub fn run() {
             commands::paste_text,
             commands::write_clipboard,
             commands::close_launcher,
+            commands::show_launcher,
             commands::list_snippets,
             commands::save_snippets,
             commands::get_preferences,
