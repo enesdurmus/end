@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Latch",
   "version": "0.1.0",
-  "identifier": "com.local.latch",
+  "identifier": "com.enesdurmus.latch",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -51,6 +51,15 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU0MEJCNUQ4NUY2MEE2REUKUldUZXBtQmYyTFVMNU4vL1JZcFU0WkUxZmU5V25TSHBJVldYVTZTTFdFRHFTU1JrNEZDcVd3MWEK",
+      "endpoints": [
+        "https://github.com/enesdurmus/latch/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

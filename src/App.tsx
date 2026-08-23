@@ -13,6 +13,7 @@ import { runActions } from "./lib/actions";
 import { buildResults, langToResult, translationToResult, gifToResult } from "./lib/results";
 import { LANGUAGES, languageName } from "./lib/languages";
 import { navReducer, initialNav } from "./lib/navigation";
+import { checkForUpdates } from "./lib/updater";
 import { useApps } from "./hooks/useApps";
 import { useClipboard } from "./hooks/useClipboard";
 import { useSnippets } from "./hooks/useSnippets";
@@ -61,6 +62,7 @@ export default function App() {
     );
   }, []);
   useEffect(() => { refreshLangs(); }, [refreshLangs]);
+  useEffect(() => { checkForUpdates().catch((e) => console.error("update check failed:", e)); }, []);
   const enterTranslate = useCallback(() => {
     loadHistory();
     refreshLangs();
