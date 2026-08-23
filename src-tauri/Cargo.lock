@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "_scaffold"
+name = "latch"
 version = "0.1.0"
 dependencies = [
  "arboard",
