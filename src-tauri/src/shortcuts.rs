@@ -17,6 +17,14 @@ pub fn register<R: Runtime>(
     let clipboard = Shortcut::from_str(&prefs.clipboard_shortcut)?;
     app.global_shortcut().register(toggle)?;
     app.global_shortcut().register(clipboard)?;
+
+    // X11 key grabs (above) don't reach a pure Wayland session; the portal
+    // path is the only way a global shortcut fires there. See docs/linux.md.
+    #[cfg(target_os = "linux")]
+    if crate::platform::wayland() {
+        crate::platform::linux::shortcuts::spawn(app.clone(), dir.clone());
+    }
+
     Ok(ShortcutsState {
         toggle: Mutex::new(toggle),
         clipboard: Mutex::new(clipboard),
@@ -29,17 +37,30 @@ pub fn on_press<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, event: Shor
         return;
     }
     let state = app.state::<ShortcutsState>();
-    let is_toggle = *shortcut == *state.toggle.lock().unwrap();
-    let is_clipboard = *shortcut == *state.clipboard.lock().unwrap();
-    let w = app.get_webview_window("main").unwrap();
+    let id = if *shortcut == *state.toggle.lock().unwrap() {
+        "toggle"
+    } else if *shortcut == *state.clipboard.lock().unwrap() {
+        "clipboard"
+    } else {
+        return;
+    };
+    dispatch(app, id);
+}
 
-    if is_toggle {
-        if w.is_visible().unwrap_or(false) {
-            focus::hide(app);
-        } else {
-            let _ = w.emit("focus-search", ());
+/// Shared by the X11 grab handler above and the Wayland portal listener.
+pub(crate) fn dispatch<R: Runtime>(app: &AppHandle<R>, id: &str) {
+    let w = app.get_webview_window("main").unwrap();
+    match id {
+        "toggle" => {
+            if w.is_visible().unwrap_or(false) {
+                focus::hide(app);
+            } else {
+                let _ = w.emit("focus-search", ());
+            }
         }
-    } else if is_clipboard {
-        let _ = w.emit("clipboard-mode", ());
+        "clipboard" => {
+            let _ = w.emit("clipboard-mode", ());
+        }
+        _ => {}
     }
 }

@@ -46,13 +46,28 @@ pub fn spawn<R: Runtime>(handle: AppHandle<R>) {
         let images = clipboard::images_dir(&handle.state::<ClipState>().dir);
         let own = handle.config().identifier.clone();
         let mut seen_change: Option<u64> = None;
+        let mut seen_text: Option<String> = None;
         let mut dirty = false;
         let mut last_save = Instant::now();
         loop {
             // where the OS offers a counter, an idle tick costs one call and never
             // re-decodes a multi-megabyte screenshot
             let change = host().clipboard_change_count();
-            if change.is_none() || change != seen_change {
+            let changed = match change {
+                Some(_) => change != seen_change,
+                // No counter: a full read spawns a helper that maps a Wayland
+                // surface, and doing that twice a second makes the dock
+                // jitter. The in-process text read is free, so it gates it.
+                // ponytail: misses two image-only copies in a row; exact
+                // again with wl-clipboard >= 2.3.0 on GNOME.
+                None => {
+                    let text = cb.get_text().ok();
+                    let differs = text != seen_text;
+                    seen_text = text;
+                    differs
+                }
+            };
+            if changed {
                 seen_change = change;
                 let state = handle.state::<ClipState>();
                 let cap = state.limit.load(Ordering::Relaxed);

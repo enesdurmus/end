@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Window } from "./ui/Window";
 import { Button } from "./ui/Button";
 import { Field } from "./ui/Field";
@@ -40,7 +41,7 @@ function HotkeyRow({ label, kind, value, onChanged }: { label: string; kind: Kin
     if (!recording) return;
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
-      if (e.key === "Escape") { setRecording(false); return; }
+      if (e.key === "Escape") { e.stopPropagation(); setRecording(false); return; }
       const accel = acceleratorFromEvent(e);
       if (!accel) return;
       setRecording(false);
@@ -185,6 +186,14 @@ export function Preferences() {
   useEffect(() => {
     invoke<Prefs>("get_preferences").then(setPrefs);
     recheck();
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") getCurrentWindow().hide();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   if (!prefs) return null;

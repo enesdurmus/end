@@ -1,7 +1,7 @@
 # Running on Linux
 
 The launcher has no Linux-only build steps; everything platform-specific lives in
-`src-tauri/src/platform/linux.rs`. What it *does* need is a few helper binaries,
+`src-tauri/src/platform/linux/`. What it *does* need is a few helper binaries,
 because X11 and Wayland expose no in-process API for the things it does.
 
 ## Build dependencies
@@ -36,6 +36,17 @@ found, since that is Linux's equivalent of the macOS permission gate.
   lands in the app that got focus back rather than in us. Tune with
   `LAUNCHER_PASTE_DELAY_MS` if your compositor is slower.
 - **`ydotool`** needs its daemon running and access to `/dev/uinput`.
-- **Global shortcuts** go through X11 key grabs, so on a pure Wayland session
-  they only fire while an XWayland surface has focus. Bind the launcher in your
-  desktop's own keyboard settings if that bites.
+- **Global shortcuts.** `tauri-plugin-global-shortcut` grabs keys through X11,
+  so on a pure Wayland session it only fires while an XWayland surface has
+  focus. To cover that, the app also binds its shortcuts through the
+  `org.freedesktop.portal.GlobalShortcuts` portal whenever `WAYLAND_DISPLAY`
+  is set (`src-tauri/src/platform/linux/shortcuts.rs`), independent of the X11
+  grab above. This needs a compositor that implements the portal — GNOME 45+
+  and KDE Plasma 6+ do; wlroots compositors (Sway, etc.) generally don't yet,
+  so they fall back to the X11-grab-while-XWayland-focused behavior described
+  above. The first bind shows a one-time system consent dialog, and unlike the
+  X11 path the compositor owns the final key combo: it takes the app's
+  `toggle_shortcut`/`clipboard_shortcut` preference as a hint only, and the
+  user can rebind through their desktop's own shortcut settings instead of
+  this app's preferences screen. Nothing crashes if the portal is missing or
+  the user declines the dialog — it just falls back to the X11 behavior.
