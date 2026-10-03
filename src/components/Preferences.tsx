@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Window } from "./ui/Window";
 import { Button } from "./ui/Button";
 import { Field } from "./ui/Field";
@@ -18,15 +19,18 @@ type Prefs = {
 };
 type Kind = "toggle" | "clipboard";
 
-const MODIFIER_CODES = new Set(["MetaLeft", "MetaRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight"]);
+const MODIFIER_CODES = new Set(["MetaLeft", "MetaRight", "OSLeft", "OSRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight"]);
 
-function acceleratorFromEvent(e: KeyboardEvent): string | null {
+// WebKitGTK can report altKey/ctrlKey/... as false (or stale) while the key is
+// held, so also trust the modifier keydown/keyup events we saw ourselves.
+function acceleratorFromEvent(e: KeyboardEvent, held: Set<string>): string | null {
   if (MODIFIER_CODES.has(e.code)) return null;
+  const has = (flag: boolean, ...codes: string[]) => flag || codes.some((c) => held.has(c));
   const parts: string[] = [];
-  if (e.ctrlKey) parts.push("Control");
-  if (e.altKey) parts.push("Alt");
-  if (e.shiftKey) parts.push("Shift");
-  if (e.metaKey) parts.push("Super");
+  if (has(e.ctrlKey, "ControlLeft", "ControlRight")) parts.push("Control");
+  if (has(e.altKey, "AltLeft", "AltRight")) parts.push("Alt");
+  if (has(e.shiftKey, "ShiftLeft", "ShiftRight")) parts.push("Shift");
+  if (has(e.metaKey, "MetaLeft", "MetaRight", "OSLeft", "OSRight")) parts.push("Super");
   if (parts.length === 0) return null;
   parts.push(e.code);
   return parts.join("+");
@@ -36,20 +40,45 @@ function HotkeyRow({ label, kind, value, onChanged }: { label: string; kind: Kin
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState("");
 
+  // The current global shortcuts must not fire (or swallow the keys) while recording.
   useEffect(() => {
     if (!recording) return;
+    const stop = () => setRecording(false);
+    invoke("pause_shortcuts");
+    window.addEventListener("blur", stop);
+    return () => {
+      window.removeEventListener("blur", stop);
+      invoke("resume_shortcuts");
+    };
+  }, [recording]);
+
+  useEffect(() => {
+    if (!recording) return;
+    const held = new Set<string>();
+    const onUp = (e: KeyboardEvent) => held.delete(e.code);
+    const onBlur = () => held.clear();
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
-      if (e.key === "Escape") { setRecording(false); return; }
-      const accel = acceleratorFromEvent(e);
+      if (MODIFIER_CODES.has(e.code)) held.add(e.code);
+      if (e.key === "Escape") { e.stopPropagation(); setRecording(false); return; }
+      const accel = acceleratorFromEvent(e, held);
       if (!accel) return;
       setRecording(false);
+      // Space's keyup would otherwise "click" the still-focused button, restart
+      // the recording and wipe the error below.
+      (document.activeElement as HTMLElement | null)?.blur();
       invoke("set_shortcut", { kind, accelerator: accel })
         .then(() => { setError(""); onChanged(accel); })
         .catch((err) => setError(String(err)));
     };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    window.addEventListener("keyup", onUp, true);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keyup", onUp, true);
+      window.removeEventListener("blur", onBlur);
+    };
   }, [recording, kind, onChanged]);
 
   return (
@@ -185,6 +214,14 @@ export function Preferences() {
   useEffect(() => {
     invoke<Prefs>("get_preferences").then(setPrefs);
     recheck();
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") getCurrentWindow().hide();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   if (!prefs) return null;

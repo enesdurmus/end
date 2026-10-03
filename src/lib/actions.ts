@@ -16,9 +16,8 @@ export type RunActions = {
   favorite: (gif: Gif) => Promise<Gif>;
 };
 
-// Hiding the window and handing focus back belongs to src-tauri/src/focus.rs; doing it
-// here raced the paste keystroke. Copy goes through arboard for the same reason —
-// navigator.clipboard needs a focused document we're in the middle of giving away.
+// Hiding and restoring focus belongs to src-tauri/src/focus.rs — doing it here
+// raced the paste keystroke. Copy goes through arboard for the same reason.
 export const runActions: RunActions = {
   paste: (text) => invoke("paste_text", { text }),
   pasteClip: (clip) => invoke("paste_clip", { clip }),

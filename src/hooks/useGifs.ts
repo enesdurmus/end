@@ -12,9 +12,8 @@ export function useGifs(mode: Mode, query: string, doFavorite: FavoriteFn, doPas
   const [library, setLibrary] = useState<Gif[]>([]);
   const [remote, setRemote] = useState<Gif[]>([]);
   const [error, setError] = useState("");
-  // Separate from `error`: that one is "the search failed", this one is "the
-  // action on a result failed" (a 404 mid-paste, an unwritable library folder).
-  // Both render in the same status-bar slot, but they come from different places.
+  // Separate from `error` (= the search failed): a 404 mid-paste, an
+  // unwritable library folder. Same status-bar slot, different source.
   const [actionError, setActionError] = useState("");
 
   const load = useCallback(() => {
@@ -26,9 +25,7 @@ export function useGifs(mode: Mode, query: string, doFavorite: FavoriteFn, doPas
   useEffect(() => {
     if (!text) { setRemote([]); setError(""); return; }
     let cancelled = false;
-    // clear a stale error from the previous query up front, mirroring
-    // useTranslate — otherwise a resolved failure keeps showing while the
-    // next search is already loading.
+    // clear the previous query's error, else it shows while the next loads
     setError("");
     const t = setTimeout(() => {
       invoke<Gif[]>("gif_search", { query: text })
@@ -38,13 +35,9 @@ export function useGifs(mode: Mode, query: string, doFavorite: FavoriteFn, doPas
     return () => { cancelled = true; clearTimeout(t); };
   }, [text]);
 
-  // Replaces the favourited row with its local copy in place, rather than
-  // re-listing the folder: a re-list refreshes `library` but leaves the stale
-  // row sitting in `remote`, so the same gif ends up appearing twice. Resolves
-  // to the saved Gif on success (or false on failure) rather than a bare
-  // boolean: the query may re-sort the merged list by score, so the caller
-  // needs the new gif's id to find where it actually landed, not just whether
-  // the save worked.
+  // Swaps the favourited row for its local copy in place — a re-list would
+  // leave the stale remote row behind and show the gif twice. Resolves to the
+  // saved Gif because the merged list may re-sort and the caller needs its id.
   const favorite = useCallback((g: Gif) => {
     return doFavorite(g).then(
       (saved) => {
@@ -64,10 +57,8 @@ export function useGifs(mode: Mode, query: string, doFavorite: FavoriteFn, doPas
     );
   }, [doPaste]);
 
-  // Local first, deliberately: the library is small and hand-picked, so if
-  // something in it matched what you typed, it is what you meant.
-  // Memoised so identity is stable across renders that don't touch these
-  // inputs — App's pending-selection effect depends on this array.
+  // Local first: the library is small and hand-picked, so a match there is
+  // what you meant. Memoised — App's pending-selection effect depends on it.
   const gifs = useMemo(() => {
     const local = text ? fuzzyFilter(text, library, (g) => g.title) : library;
     return [...local, ...remote];

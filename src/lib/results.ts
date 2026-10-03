@@ -39,8 +39,7 @@ export function formatBytes(n: number): string {
   return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
-// Titles double as the search haystack (fuzzyFilter matches on title), so an
-// image is titled by its dimensions and files by their names — both typeable.
+// Titles double as the search haystack, so every kind gets a typeable one.
 // ⌘Enter opens what a row points at; plain text has nothing to open.
 export function clipToResult(clip: Clip, i: number, actions: RunActions): Result {
   const base = { id: "clip:" + i, type: "clipboard" as const, clip, run: () => actions.pasteClip(clip) };
@@ -48,8 +47,7 @@ export function clipToResult(clip: Clip, i: number, actions: RunActions): Result
     return { ...base, title: clip.text.replace(/\s+/g, " ").slice(0, 80) };
   }
   if (clip.kind === "image") {
-    // Copied pixels have no filename; the backend names them after their source
-    // URL or the app they came from, so the title is always something typeable.
+    // copied pixels have no filename: the backend names them after the source
     return {
       ...base,
       title: clip.name,
@@ -113,9 +111,8 @@ export function translationToResult(e: TranslationEntry, actions: RunActions): R
   };
 }
 
-// Narrower than RunActions: App wires these to useGifs's error-swallowing
-// wrappers (which own the library/remote state transition and the action-error
-// channel), not to the raw invoke-backed RunActions.favorite/pasteGif.
+// Narrower than RunActions: App wires these to useGifs's wrappers, which own
+// the library/remote transition and the action-error channel.
 export type GifActions = {
   pasteGif: (gif: Gif) => Promise<void> | void;
   favorite: (gif: Gif) => Promise<void> | void;

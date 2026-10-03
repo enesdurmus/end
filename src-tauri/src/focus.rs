@@ -24,9 +24,42 @@ impl Focus {
     }
 }
 
+/// Wayland xdg-activation token from the shortcut portal, consumed by the next show().
+#[cfg(target_os = "linux")]
+static ACTIVATION_TOKEN: Mutex<Option<String>> = Mutex::new(None);
+
+#[cfg(target_os = "linux")]
+pub fn set_activation_token(token: String) {
+    *ACTIVATION_TOKEN.lock().unwrap() = Some(token);
+}
+
+#[cfg(target_os = "linux")]
+static SHOWN_AT: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+
+/// True while the compositor may still be settling focus after show().
+#[cfg(target_os = "linux")]
+pub fn just_shown() -> bool {
+    SHOWN_AT.lock().unwrap().is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(500))
+}
+
 pub fn show<R: Runtime>(app: &AppHandle<R>) {
     app.state::<Focus>().capture(); // before we become frontmost
+    #[cfg(target_os = "linux")]
+    {
+        *SHOWN_AT.lock().unwrap() = Some(std::time::Instant::now());
+    }
     if let Some(w) = app.get_webview_window("main") {
+        #[cfg(target_os = "linux")]
+        if let Some(token) = ACTIVATION_TOKEN.lock().unwrap().take() {
+            // GTK turns the startup id into an xdg-activation request on present
+            let gw = w.clone();
+            let _ = app.run_on_main_thread(move || {
+                use gtk::prelude::GtkWindowExt;
+                if let Ok(win) = gw.gtk_window() {
+                    win.set_startup_id(&token);
+                }
+            });
+        }
         let _ = w.center();
         let _ = w.show();
         let _ = w.set_focus();

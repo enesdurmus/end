@@ -29,9 +29,11 @@ mod macos;
 pub use macos::MacOs as Host;
 
 #[cfg(target_os = "linux")]
-mod linux;
+pub(crate) mod linux;
 #[cfg(target_os = "linux")]
 pub use linux::Linux as Host;
+#[cfg(target_os = "linux")]
+pub(crate) use linux::wayland;
 
 #[cfg(target_os = "windows")]
 mod windows;

@@ -5,3 +5,5 @@ src-tauri/target/
 .idea/
 .serena/
 docs/superpowers/
+src-tauri/gen/schemas/
+docs/cleanup-tasks.md
