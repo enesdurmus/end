@@ -1,6 +1,6 @@
 [package]
 name = "latch"
-version = "0.1.0"
+version = "0.1.1"
 description = "A fast, keyboard-driven app launcher for macOS and Linux."
 authors = ["Enes Durmus"]
 license = "MIT"
