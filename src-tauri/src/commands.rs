@@ -119,8 +119,19 @@ pub fn set_shortcut(app: tauri::AppHandle, kind: String, accelerator: String) ->
         _ => return Err(format!("unknown shortcut kind: {kind}")),
     };
     let mut current = slot.lock().unwrap();
-    app.global_shortcut().unregister(*current).map_err(|e| e.to_string())?;
-    app.global_shortcut().register(new_shortcut).map_err(|e| e.to_string())?;
+    // On Wayland the X11 grab is only a fallback and may never have been
+    // registered (see shortcuts::register), so its failures are not fatal.
+    let grab = |r: Result<(), tauri_plugin_global_shortcut::Error>| match r {
+        Err(e) if !crate::shortcuts::x11_grab_is_optional() => Err(e.to_string()),
+        Err(e) => {
+            eprintln!("x11 shortcut grab failed: {e}");
+            Ok(())
+        }
+        Ok(()) => Ok(()),
+    };
+    // the old one is already gone if recording paused the grabs
+    let _ = app.global_shortcut().unregister(*current);
+    grab(app.global_shortcut().register(new_shortcut))?;
     *current = new_shortcut;
 
     let mut prefs = preferences::load(&state.dir);
@@ -129,7 +140,46 @@ pub fn set_shortcut(app: tauri::AppHandle, kind: String, accelerator: String) ->
     } else {
         prefs.clipboard_shortcut = accelerator;
     }
-    preferences::save(&state.dir, &prefs)
+    preferences::save(&state.dir, &prefs)?;
+
+    // the portal binding (the real shortcut on Wayland) is separate from the grab above
+    #[cfg(target_os = "linux")]
+    if crate::platform::wayland() {
+        crate::platform::linux::shortcuts::spawn(app.clone(), state.dir.clone());
+    }
+    Ok(())
+}
+
+/// While Preferences records a new shortcut, the current ones must not fire
+/// (or even be grabbed, or the key never reaches the Preferences window).
+#[tauri::command]
+pub fn pause_shortcuts(app: tauri::AppHandle) {
+    let state = app.state::<ShortcutsState>();
+    for slot in [&state.toggle, &state.clipboard] {
+        let _ = app.global_shortcut().unregister(*slot.lock().unwrap());
+    }
+    #[cfg(target_os = "linux")]
+    if crate::platform::wayland() {
+        crate::platform::linux::shortcuts::stop();
+    }
+}
+
+/// Undoes `pause_shortcuts` from the saved state; holding the slot locks
+/// serialises it with a concurrent `set_shortcut`, so the newest value wins.
+#[tauri::command]
+pub fn resume_shortcuts(app: tauri::AppHandle) {
+    let state = app.state::<ShortcutsState>();
+    let (toggle, clipboard) = (state.toggle.lock().unwrap(), state.clipboard.lock().unwrap());
+    for s in [*toggle, *clipboard] {
+        let _ = app.global_shortcut().unregister(s);
+        if let Err(e) = app.global_shortcut().register(s) {
+            eprintln!("resume shortcut: {e}");
+        }
+    }
+    #[cfg(target_os = "linux")]
+    if crate::platform::wayland() {
+        crate::platform::linux::shortcuts::spawn(app.clone(), state.dir.clone());
+    }
 }
 
 #[tauri::command]

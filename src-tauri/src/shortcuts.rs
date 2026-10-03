@@ -15,8 +15,16 @@ pub fn register<R: Runtime>(
     let prefs = preferences::load(&dir);
     let toggle = Shortcut::from_str(&prefs.toggle_shortcut)?;
     let clipboard = Shortcut::from_str(&prefs.clipboard_shortcut)?;
-    app.global_shortcut().register(toggle)?;
-    app.global_shortcut().register(clipboard)?;
+    // On Wayland the X11 grab is only a fallback and can legitimately fail
+    // (no XWayland, key already taken); the portal below must still get its turn.
+    for s in [toggle, clipboard] {
+        if let Err(e) = app.global_shortcut().register(s) {
+            if !x11_grab_is_optional() {
+                return Err(e.into());
+            }
+            eprintln!("x11 shortcut grab failed on Wayland: {e}");
+        }
+    }
 
     // X11 key grabs (above) don't reach a pure Wayland session; the portal
     // path is the only way a global shortcut fires there. See docs/linux.md.
@@ -30,6 +38,14 @@ pub fn register<R: Runtime>(
         clipboard: Mutex::new(clipboard),
         dir,
     })
+}
+
+/// True on Wayland, where the portal is the real shortcut path.
+pub fn x11_grab_is_optional() -> bool {
+    #[cfg(target_os = "linux")]
+    return crate::platform::wayland();
+    #[cfg(not(target_os = "linux"))]
+    false
 }
 
 pub fn on_press<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, event: ShortcutEvent) {

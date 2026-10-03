@@ -62,10 +62,14 @@ impl Platform for Linux {
     }
 
     fn accessibility_granted(&self) -> bool {
-        input::key_tool().is_some()
+        input::can_paste()
     }
 
     fn open_accessibility_settings(&self) -> Result<(), String> {
+        // On Wayland the portal asks the user itself, so just trigger its dialog.
+        if wayland() {
+            return tauri::async_runtime::block_on(input::portal::ensure());
+        }
         Err(format!(
             "no keystroke tool found. Install {} to enable pasting.",
             if wayland() { "wtype or ydotool" } else { "xdotool" }

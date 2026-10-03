@@ -93,6 +93,8 @@ pub fn run() {
             commands::save_snippets,
             commands::get_preferences,
             commands::set_shortcut,
+            commands::pause_shortcuts,
+            commands::resume_shortcuts,
             commands::set_history_limit,
             commands::set_image_limit,
             commands::check_accessibility,

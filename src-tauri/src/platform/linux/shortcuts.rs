@@ -2,56 +2,95 @@
 //! interface. X11 sessions keep `tauri-plugin-global-shortcut`'s key grabs.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
-use ashpd::zbus::zvariant::Value;
 use futures_util::StreamExt;
 use tauri::{AppHandle, Runtime};
 
 use crate::{preferences, shortcuts};
 
 const BIND_TIMEOUT: Duration = Duration::from_secs(60);
+/// Lets a burst of spawn() calls (save + resume) collapse into the last one
+/// before anything reaches the compositor and a dialog opens.
+const SETTLE: Duration = Duration::from_millis(400);
+/// How often a superseded session notices it should close.
+const STALE_CHECK: Duration = Duration::from_millis(250);
+
+/// Bumped by every `spawn`; a running session whose number is no longer current
+/// closes itself.
+static GENERATION: AtomicU64 = AtomicU64::new(0);
+
+fn stale(generation: u64) -> bool {
+    GENERATION.load(Ordering::SeqCst) != generation
+}
+
+/// Closes the running session (and so releases the compositor's key grab)
+/// without opening a new one.
+pub(crate) fn stop() {
+    GENERATION.fetch_add(1, Ordering::SeqCst);
+}
 
 /// Returns immediately; registration failures (no portal, user declines the
-/// bind dialog) are logged, never fatal.
+/// bind dialog) are logged, never fatal. Calling it again (shortcut changed)
+/// replaces the previous session.
 pub(crate) fn spawn<R: Runtime>(app: AppHandle<R>, dir: PathBuf) {
+    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = run(&app, &dir).await {
+        if let Err(e) = run(&app, &dir, generation).await {
             eprintln!("wayland global shortcuts: {e}");
         }
     });
 }
 
-async fn run<R: Runtime>(app: &AppHandle<R>, dir: &std::path::Path) -> ashpd::Result<()> {
+async fn run<R: Runtime>(
+    app: &AppHandle<R>,
+    dir: &std::path::Path,
+    generation: u64,
+) -> ashpd::Result<()> {
+    tokio::time::sleep(SETTLE).await;
+    if stale(generation) {
+        return Ok(());
+    }
     register_app_id(app).await;
 
     let prefs = preferences::load(dir);
     let portal = GlobalShortcuts::new().await?;
     let session = portal.create_session(Default::default()).await?;
-    // Stable ids on purpose: the compositor stores the binding under the id, so
-    // a shortcut granted once keeps working without prompting again.
+    // The compositor remembers a binding under its id and treats the preferred
+    // trigger as a first-bind hint only, so an id that stayed the same would keep
+    // the old key forever. The id therefore carries the trigger ("toggle@LOGO+space"):
+    // an unchanged shortcut keeps its grant, a changed one is bound afresh.
+    let toggle = preferred_trigger(&prefs.toggle_shortcut);
+    let clipboard = preferred_trigger(&prefs.clipboard_shortcut);
+    let id = |name: &str, t: &Option<String>| format!("{name}@{}", t.as_deref().unwrap_or(""));
     let bindings = [
-        NewShortcut::new("toggle", "Toggle launcher")
-            .preferred_trigger(preferred_trigger(&prefs.toggle_shortcut).as_deref()),
-        NewShortcut::new("clipboard", "Open clipboard history")
-            .preferred_trigger(preferred_trigger(&prefs.clipboard_shortcut).as_deref()),
+        NewShortcut::new(id("toggle", &toggle), "Toggle launcher")
+            .preferred_trigger(toggle.as_deref()),
+        NewShortcut::new(id("clipboard", &clipboard), "Open clipboard history")
+            .preferred_trigger(clipboard.as_deref()),
     ];
     // A consent dialog the user never saw never answers, and this call waits
     // for it - give up rather than hang with nothing bound and nothing logged.
-    let request = match tokio::time::timeout(
-        BIND_TIMEOUT,
-        portal.bind_shortcuts(&session, &bindings, None, Default::default()),
-    )
-    .await
-    {
-        Ok(r) => r?,
-        Err(_) => {
-            eprintln!(
-                "wayland global shortcuts: the compositor never answered the bind request \
-                 (consent dialog dismissed?); no global shortcut is active this run"
-            );
-            return Ok(());
+    // Meanwhile a newer spawn() cancels this one, which also dismisses its dialog.
+    let mut bind = Box::pin(portal.bind_shortcuts(&session, &bindings, None, Default::default()));
+    let started = std::time::Instant::now();
+    let request = loop {
+        match tokio::time::timeout(STALE_CHECK, &mut bind).await {
+            Ok(r) => break r?,
+            Err(_) if stale(generation) => {
+                drop(bind);
+                return session.close().await;
+            }
+            Err(_) if started.elapsed() >= BIND_TIMEOUT => {
+                eprintln!(
+                    "wayland global shortcuts: the compositor never answered the bind request \
+                     (consent dialog dismissed?); no global shortcut is active this run"
+                );
+                return Ok(());
+            }
+            Err(_) => {}
         }
     };
     // The compositor picks the final combo, so log what it settled on.
@@ -60,27 +99,67 @@ async fn run<R: Runtime>(app: &AppHandle<R>, dir: &std::path::Path) -> ashpd::Re
     }
 
     let mut activated = portal.receive_activated().await?;
-    while let Some(event) = activated.next().await {
-        shortcuts::dispatch(app, event.shortcut_id());
+    loop {
+        if GENERATION.load(Ordering::SeqCst) != generation {
+            return session.close().await;
+        }
+        // wake up periodically only to notice that a newer session replaced us
+        let Ok(next) = tokio::time::timeout(STALE_CHECK, activated.next()).await else { continue };
+        let Some(event) = next else { return Ok(()) };
+        if GENERATION.load(Ordering::SeqCst) != generation {
+            return session.close().await;
+        }
+        // Without the compositor's token, Mutter/KWin refuse to focus a window
+        // that a global shortcut just showed (focus-stealing prevention).
+        if let Some(t) = event.options().get("activation_token") {
+            if let Ok(t) = String::try_from(t.clone()) {
+                crate::focus::set_activation_token(t);
+            }
+        }
+        let name = event.shortcut_id().split('@').next().unwrap_or_default();
+        shortcuts::dispatch(app, name);
     }
-    Ok(())
 }
 
-/// Some compositors (GNOME) only show non-Flatpak apps in the bind dialog once
-/// they announce an app id. Best-effort: safe to skip if it fails.
+/// Portals key their stored permissions by app id, and for a non-Flatpak app the
+/// only way to give them one is the Registry. It must go over the same D-Bus
+/// connection the shortcut calls use (ashpd's shared one), be a valid reverse-DNS
+/// id, happen once, and name an installed `<id>.desktop` file - without that the
+/// compositor files our shortcuts under whatever terminal launched us. Best-effort.
 async fn register_app_id<R: Runtime>(app: &AppHandle<R>) {
-    let Ok(conn) = ashpd::zbus::Connection::session().await else { return };
-    let options = std::collections::HashMap::<&str, Value>::new();
-    let _: Result<(), _> = conn
-        .call_method(
-            Some("org.freedesktop.portal.Desktop"),
-            "/org/freedesktop/portal/desktop",
-            Some("org.freedesktop.host.portal.Registry"),
-            "Register",
-            &(app.package_info().name.as_str(), options),
-        )
-        .await
-        .map(|_| ());
+    static DONE: AtomicBool = AtomicBool::new(false);
+    if DONE.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let identifier = app.config().identifier.as_str();
+    if let Err(e) = ensure_desktop_file(identifier, &app.package_info().name) {
+        eprintln!("wayland global shortcuts: could not write {identifier}.desktop: {e}");
+    }
+    match ashpd::AppID::try_from(identifier) {
+        Ok(id) => {
+            if let Err(e) = ashpd::register_host_app(id).await {
+                eprintln!("wayland global shortcuts: app id registration failed: {e}");
+            }
+        }
+        Err(e) => eprintln!("wayland global shortcuts: identifier is not a valid app id: {e}"),
+    }
+}
+
+/// A hidden per-user launcher entry for the running binary, rewritten when the
+/// binary moves (dev build vs. installed). Packaged installs ship their own.
+fn ensure_desktop_file(identifier: &str, name: &str) -> std::io::Result<()> {
+    let dir = super::env_dir("XDG_DATA_HOME", super::home().join(".local/share")).join("applications");
+    let exe = std::env::current_exe()?;
+    let entry = format!(
+        "[Desktop Entry]\nType=Application\nName={name}\nExec={}\nNoDisplay=true\nTerminal=false\n",
+        exe.display()
+    );
+    let path = dir.join(format!("{identifier}.desktop"));
+    if std::fs::read_to_string(&path).is_ok_and(|old| old == entry) {
+        return Ok(());
+    }
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(path, entry)
 }
 
 /// Shortcut preference -> XDG "shortcuts" syntax: "+"-joined uppercase modifier
