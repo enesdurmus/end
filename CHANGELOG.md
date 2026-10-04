@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/enesdurmus/end/compare/v0.2.0...v0.2.1) (2026-10-04)
+
+
+### Dependencies
+
+* **deps:** bump @tauri-apps/plugin-global-shortcut from 2.3.2 to 2.4.0 ([#30](https://github.com/enesdurmus/end/issues/30)) ([2963c01](https://github.com/enesdurmus/end/commit/2963c01a45439b99f2f3bbe5add90cfb75a85ff9))
+
 ## [0.2.0](https://github.com/enesdurmus/end/compare/v0.1.2...v0.2.0) (2026-10-04)
 
 
