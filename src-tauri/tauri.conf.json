@@ -14,8 +14,8 @@
     "windows": [
       {
         "label": "main",
-        "width": 700,
-        "height": 460,
+        "width": 796,
+        "height": 556,
         "center": true,
         "decorations": false,
         "transparent": true,

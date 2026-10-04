@@ -6,9 +6,18 @@ import { Result } from "../types";
 // Tauri's asset protocol. Remote rows are already https and pass through.
 const src = (s: string) => (s.startsWith("http") ? s : convertFileSrc(s));
 
-export function GifList({ results, selected }: { results: Result[]; selected: number }) {
+export function GifList({ results, selected, onSelect }: { results: Result[]; selected: number; onSelect: (i: number) => void }) {
   const selRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { selRef.current?.scrollIntoView({ block: "nearest" }); }, [selected]);
+  // a mouse-driven selection is already under the pointer; scrolling it would make the list jump
+  const byMouse = useRef(false);
+  useEffect(() => {
+    if (byMouse.current) { byMouse.current = false; return; }
+    selRef.current?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
+  const mouse = (i: number, r: Result) => ({
+    onMouseMove: () => { if (i !== selected) { byMouse.current = true; onSelect(i); } },
+    onClick: () => { onSelect(i); r.run(); },
+  });
 
   return (
     <ul className="scroll-thin list-none m-0 p-2 overflow-y-auto flex-1 min-h-0">
@@ -16,6 +25,7 @@ export function GifList({ results, selected }: { results: Result[]; selected: nu
         <li key={r.id}>
           <div
             ref={i === selected ? selRef : null}
+            {...mouse(i, r)}
             className={
               "flex items-center gap-3 px-2.5 py-2 rounded-lg text-sm cursor-default " +
               (i === selected ? "bg-sel" : "")

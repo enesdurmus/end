@@ -2,13 +2,13 @@ import { Result } from "../types";
 import { ResultList } from "./ResultList";
 import { ClipPreview } from "./ClipPreview";
 
-export function ClipboardView({ results, selected }: { results: Result[]; selected: number }) {
+export function ClipboardView({ results, selected, onSelect }: { results: Result[]; selected: number; onSelect: (i: number) => void }) {
   const clip = results[selected]?.clip;
   const body = results[selected]?.body;
   return (
     <div className="flex flex-1 min-h-0">
       <div className="flex-none w-[42%] border-r border-hair flex flex-col min-h-0">
-        <ResultList results={results} selected={selected} />
+        <ResultList results={results} selected={selected} onSelect={onSelect} />
       </div>
       <div className="scroll-thin flex-1 min-w-0 px-[18px] py-4 overflow-y-auto">
         {clip ? (

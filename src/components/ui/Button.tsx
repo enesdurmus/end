@@ -5,8 +5,8 @@ export function Button({ className = "", ...props }: ButtonHTMLAttributes<HTMLBu
     <button
       {...props}
       className={
-        "bg-white/8 text-fg border border-hair rounded-[7px] px-3 py-1.5 " +
-        "text-[13px] cursor-pointer hover:bg-white/15 " +
+        "surface-chip rounded-xl px-3.5 py-2 text-[13px] cursor-pointer transition-colors " +
+        "hover:text-fg hover:border-[#7c4dff]/60 hover:bg-[#4630b9]/40 " +
         className
       }
     />

@@ -13,10 +13,11 @@ type Args = {
   detected: string;
   onClearHistory: () => void;
   inputRef: RefObject<HTMLInputElement | null>;
+  onTab: ((delta: number) => void) | null; // null when no tab bar is showing
 };
 
 export function useKeyboardNav({
-  dispatch, results, selected, mode, query, picking, detected, onClearHistory, inputRef,
+  dispatch, results, selected, mode, query, picking, detected, onClearHistory, inputRef, onTab,
 }: Args) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -40,6 +41,16 @@ export function useKeyboardNav({
         return;
       }
 
+      // ←/→ walk the tabs, but only once the caret has nothing left to move over,
+      // so editing the query with the arrows still works
+      if (onTab && (e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.metaKey && !e.altKey) {
+        const el = inputRef.current;
+        const atEdge = !el || (e.key === "ArrowLeft"
+          ? el.selectionStart === 0 && el.selectionEnd === 0
+          : el.selectionStart === el.value.length && el.selectionEnd === el.value.length);
+        if (atEdge) { e.preventDefault(); onTab(e.key === "ArrowLeft" ? -1 : 1); return; }
+      }
+
       if (e.key === "Escape") {
         if (picking) dispatch({ type: "cancelPick" });
         else if (mode === "root") invoke("close_launcher");
@@ -60,5 +71,5 @@ export function useKeyboardNav({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dispatch, results, selected, mode, query, picking, detected, onClearHistory, inputRef]);
+  }, [dispatch, results, selected, mode, query, picking, detected, onClearHistory, inputRef, onTab]);
 }

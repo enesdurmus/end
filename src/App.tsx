@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { SearchBar } from "./components/SearchBar";
 import { ResultList } from "./components/ResultList";
 import { ClipboardView } from "./components/ClipboardView";
 import { TranslateView } from "./components/TranslateView";
 import { GifList } from "./components/GifList";
+import { Tabs, Tab, TABS } from "./components/Tabs";
 import { StatusBar } from "./components/StatusBar";
 import { SnippetManager } from "./components/SnippetManager";
 import { Window } from "./components/ui/Window";
@@ -23,7 +24,9 @@ import { useTranslateHistory } from "./hooks/useTranslateHistory";
 import { useGifs } from "./hooks/useGifs";
 import { useLauncherEvents } from "./hooks/useLauncherEvents";
 import { useKeyboardNav } from "./hooks/useKeyboardNav";
-import { Gif } from "./types";
+import { Gif, Result } from "./types";
+
+const TAB_TYPE: Partial<Record<Tab, Result["type"]>> = { Apps: "app", Commands: "command", Snippets: "snippet" };
 
 const PLACEHOLDER = {
   clipboard: "Search clipboard history...",
@@ -123,7 +126,8 @@ export default function App() {
       pendingSelectId.current = null;
     }
   }, [mode, gifResults]);
-  const results = useMemo(
+  const [tab, setTab] = useState<Tab>("All");
+  const all = useMemo(
     () =>
       buildResults(
         mode,
@@ -133,6 +137,26 @@ export default function App() {
       ),
     [mode, query, picking, commands, apps, snips, clips, files, langs, translation, history, gifResults]
   );
+  // Apps/Commands/Snippets filter the root list; Files/Clipboard are real modes.
+  // The tab bar stays up in those three screens so arrows can walk across it.
+  const showTabs = !picking && (mode === "root" || mode === "files" || mode === "clipboard");
+  const activeTab: Tab = mode === "files" ? "Files" : mode === "clipboard" ? "Clipboard" : tab;
+  const results = useMemo(() => {
+    const type = TAB_TYPE[tab];
+    return mode === "root" && !picking && type ? all.filter((r) => r.type === type) : all;
+  }, [all, mode, picking, tab]);
+  const pickTab = (t: Tab) => {
+    if (t === activeTab) return;
+    const cmd = t === "Files" ? "cmd:files" : t === "Clipboard" ? "cmd:clipboard" : null;
+    if (cmd) { commands.find((c) => c.id === cmd)?.run(); return; }
+    if (mode !== "root") dispatch({ type: "goRoot" });
+    setTab(t);
+  };
+  const onSelect = (index: number) => dispatch({ type: "selectIndex", index });
+  const stepTab = (delta: number) => {
+    const next = TABS[TABS.indexOf(activeTab) + delta];
+    if (next) pickTab(next);
+  };
 
   useLauncherEvents(dispatch, loadClips);
   useKeyboardNav({
@@ -140,6 +164,7 @@ export default function App() {
     detected: entry?.from ?? "en",
     onClearHistory: clearHistory,
     inputRef,
+    onTab: showTabs ? stepTab : null,
   });
 
   if (managing) return <SnippetManager onClose={() => dispatch({ type: "closeManage" })} />;
@@ -168,7 +193,7 @@ export default function App() {
               (gifList.some((g) => g.source === "remote") ? "Powered by KLIPY" : ""),
             hints: [["Paste", "↵"], ["Save", "⌘↵"], ["Folder", "⌘O"], ["Back", "esc"]],
           }
-        : { left: `${results.length} results`, hints: [["Open", "↵"], ["Close", "esc"]] };
+        : { left: `${results.length} results`, hints: [["Navigate", "↑↓"], ["Tabs", "←→"], ["Open", "↵"], ["Close", "esc"]] };
 
   return (
     <Window variant="floating">
@@ -186,16 +211,17 @@ export default function App() {
         placeholder={picking ? "Search languages..." : PLACEHOLDER[mode]}
         onChange={(q) => dispatch({ type: "setQuery", query: q })}
       />
+      {showTabs && <Tabs active={activeTab} onPick={pickTab} />}
       {picking ? (
-        <ResultList results={results} selected={selected} />
+        <ResultList results={results} selected={selected} onSelect={onSelect} />
       ) : typing ? (
         <TranslateView entry={entry} loading={loading} error={error} />
       ) : mode === "clipboard" || mode === "translate" ? (
-        <ClipboardView results={results} selected={selected} />
+        <ClipboardView results={results} selected={selected} onSelect={onSelect} />
       ) : mode === "gif" ? (
-        <GifList results={results} selected={selected} />
+        <GifList results={results} selected={selected} onSelect={onSelect} />
       ) : (
-        <ResultList results={results} selected={selected} />
+        <ResultList results={results} selected={selected} onSelect={onSelect} />
       )}
       <StatusBar left={status.left} hints={status.hints} />
     </Window>

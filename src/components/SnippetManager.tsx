@@ -11,8 +11,9 @@ export function SnippetManager({ onClose }: { onClose: () => void }) {
   useEffect(() => { invoke<Snippet[]>("list_snippets").then(setItems); }, []);
   const persist = (next: Snippet[]) => { setItems(next); invoke("save_snippets", { items: next }); };
   return (
-    <Window variant="flat" className="p-5">
-      <h3 className="m-0 mb-4 text-[15px] font-semibold">Snippets</h3>
+    <Window variant="floating">
+      <div className="scroll-thin h-full overflow-y-auto p-5">
+      <h3 className="m-0 mb-4 text-[15px] font-medium">Snippets</h3>
       {items.map((s, i) => (
         <div key={i} className="flex gap-2 mb-2">
           <Input value={s.keyword} placeholder="keyword"
@@ -27,6 +28,7 @@ export function SnippetManager({ onClose }: { onClose: () => void }) {
       <div className="flex gap-2">
         <Button onClick={() => persist([...items, { keyword: "", text: "" }])}>+ add</Button>
         <Button onClick={onClose}>close (Esc)</Button>
+      </div>
       </div>
     </Window>
   );

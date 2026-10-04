@@ -5,6 +5,7 @@ import { Window } from "./ui/Window";
 import { Button } from "./ui/Button";
 import { Field } from "./ui/Field";
 import { Input } from "./ui/Input";
+import { Select } from "./ui/Select";
 import { LANGUAGES } from "../lib/languages";
 
 type Prefs = {
@@ -82,11 +83,10 @@ function HotkeyRow({ label, kind, value, onChanged }: { label: string; kind: Kin
   }, [recording, kind, onChanged]);
 
   return (
-    <Field label={label}>
+    <Field label={label} error={error}>
       <Button className="min-w-[180px]" onClick={() => { setRecording(true); setError(""); }}>
         {recording ? "Waiting for keys…" : value.replace(/\+/g, " + ")}
       </Button>
-      {error && <div className="text-danger text-xs mt-1">{error}</div>}
     </Field>
   );
 }
@@ -118,22 +118,16 @@ function LimitRow({ label, command, min, max, hint, value, onChanged }: LimitRow
   };
 
   return (
-    <Field label={label}>
+    <Field label={label} hint={hint} error={error}>
       <Input
         type="number" min={min} max={max} className="w-24" value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
       />
-      {hint && !error && <div className="text-fg-dim text-xs mt-1">{hint}</div>}
-      {error && <div className="text-danger text-xs mt-1">{error}</div>}
     </Field>
   );
 }
-
-// ponytail: plain <select>; a styled dropdown primitive isn't worth it for two rows
-const SELECT_CLASS =
-  "bg-white/10 border border-hair rounded-md px-2 py-1 text-[13px] text-fg outline-none";
 
 function TranslateRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Prefs>) => void }) {
   const [error, setError] = useState("");
@@ -151,27 +145,24 @@ function TranslateRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Part
   return (
     <>
       <Field label="Translate To">
-        <select
-          className={SELECT_CLASS}
+        <Select
           value={prefs.translate_target}
           onChange={(e) => commit({ translate_target: e.target.value })}
         >
           {LANGUAGES.map((l) => (
             <option key={l.code} value={l.code}>{l.name}</option>
           ))}
-        </select>
+        </Select>
       </Field>
-      <Field label="Translation Engine">
-        <select
-          className={SELECT_CLASS}
+      <Field label="Translation Engine" error={error}>
+        <Select
           value={prefs.translate_provider}
           onChange={(e) => commit({ translate_provider: e.target.value })}
         >
           {/* mirrors the Provider enum in src-tauri/src/translate.rs */}
           <option value="google">Google</option>
-        </select>
+        </Select>
       </Field>
-      {error && <div className="text-danger text-xs mt-1">{error}</div>}
     </>
   );
 }
@@ -192,15 +183,12 @@ function GifRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Pr
 
   return (
     <>
-      <Field label="KLIPY API Key">
+      <Field label="KLIPY API Key" hint="Boş bırakırsan uygulamanın kendi anahtarı kullanılır.">
         <Input value={key} onChange={(e) => setKey(e.target.value)} onBlur={() => commit({ klipy_api_key: key })} />
-        <div className="text-fg/60 text-xs mt-1">Boş bırakırsan uygulamanın kendi anahtarı kullanılır.</div>
       </Field>
-      <Field label="GIF Folder">
+      <Field label="GIF Folder" hint="Boş bırakırsan varsayılan klasör kullanılır." error={error}>
         <Input value={dir} onChange={(e) => setDir(e.target.value)} onBlur={() => commit({ gif_dir: dir })} />
-        <div className="text-fg/60 text-xs mt-1">Boş bırakırsan varsayılan klasör kullanılır.</div>
       </Field>
-      {error && <div className="text-danger text-xs mt-1">{error}</div>}
     </>
   );
 }
@@ -228,7 +216,7 @@ export function Preferences() {
 
   return (
     <Window variant="flat" className="p-5">
-      <h3 className="m-0 mb-4 text-[15px] font-semibold">Preferences</h3>
+      <h3 className="m-0 mb-4 text-[15px] font-medium">Preferences</h3>
 
       <HotkeyRow label="Toggle End" kind="toggle" value={prefs.toggle_shortcut}
         onChanged={(accel) => setPrefs({ ...prefs, toggle_shortcut: accel })} />
