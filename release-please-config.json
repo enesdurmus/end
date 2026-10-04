@@ -9,9 +9,8 @@
         { "type": "feat", "section": "Features" },
         { "type": "fix", "section": "Bug Fixes" },
         { "type": "perf", "section": "Performance Improvements" },
-        { "type": "deps", "section": "Dependencies" },
         { "type": "revert", "section": "Reverts" },
-        { "type": "build", "section": "Build System" }
+        { "type": "build", "section": "Dependencies" }
       ],
       "extra-files": [
         { "type": "json", "path": "src-tauri/tauri.conf.json", "jsonpath": "$.version" },
