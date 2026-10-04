@@ -70,7 +70,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: "Latch v__VERSION__"
+          releaseName: "End v__VERSION__"
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

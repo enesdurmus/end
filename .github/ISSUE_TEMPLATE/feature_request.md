@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for Latch
+about: Suggest an idea for End
 title: ""
 labels: enhancement
 ---

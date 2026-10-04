@@ -1,16 +1,16 @@
-# Latch
+# End
 
-[![CI](https://github.com/enesdurmus/latch/actions/workflows/ci.yml/badge.svg)](https://github.com/enesdurmus/latch/actions/workflows/ci.yml)
+[![CI](https://github.com/enesdurmus/End/actions/workflows/ci.yml/badge.svg)](https://github.com/enesdurmus/End/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A fast, keyboard-driven app launcher for macOS and Linux with no telemetry and
 no backend of its own — built with Tauri, React, and TypeScript.
 
-## Why Latch
+## Why End
 
 I was a happy user of a well-known macOS launcher, but my company's IT policy
 blocked it — it phones home to a vendor's servers and sends telemetry, which
-didn't fly on a work machine. Rather than go without, I built Latch: a
+didn't fly on a work machine. Rather than go without, I built End: a
 launcher that runs entirely on your machine, doesn't talk to any backend of
 its own, and works the same way on Linux as it does on macOS.
 
@@ -22,31 +22,31 @@ its own, and works the same way on Linux as it does on macOS.
 - **Translate mode** — type in one language, get the translation instantly
 - **Snippets** — save and paste reusable text with a few keystrokes
 - **GIF mode** — search and paste GIFs from your own library or a remote provider
-- **Global hotkey** — summon Latch from anywhere, no mouse required
+- **Global hotkey** — summon End from anywhere, no mouse required
 - **No telemetry, no backend** — preferences, clipboard history, and snippets
-  are stored on disk; Latch has no server of its own and never phones home.
+  are stored on disk; End has no server of its own and never phones home.
   Translate and GIF search do call their respective third-party APIs directly
-  from your machine — that's the only outbound traffic Latch generates
+  from your machine — that's the only outbound traffic End generates
 - **Cross-platform** — the same app, the same shortcuts, on macOS and Linux
 
 ## Install
 
-Grab the latest build for your platform from the [Releases](https://github.com/enesdurmus/latch/releases) page:
+Grab the latest build for your platform from the [Releases](https://github.com/enesdurmus/End/releases) page:
 
-- **macOS**: download the `.dmg`, drag Latch into Applications. The build isn't
+- **macOS**: download the `.dmg`, drag End into Applications. The build isn't
   notarized by Apple, so on first launch Gatekeeper will refuse to open it —
   right-click the app and choose **Open**, or run:
   ```sh
-  xattr -cr /Applications/Latch.app
+  xattr -cr /Applications/End.app
   ```
 - **Linux**: download the `.AppImage`, make it executable, and run it:
   ```sh
-  chmod +x Latch_*.AppImage
-  ./Latch_*.AppImage
+  chmod +x End_*.AppImage
+  ./End_*.AppImage
   ```
   A `.deb` is also published for Debian/Ubuntu-based systems.
 
-Latch checks for updates on startup and will prompt you to install them
+End checks for updates on startup and will prompt you to install them
 in-app (AppImage and macOS builds only — the `.deb` package updates through
 your usual package manager).
 

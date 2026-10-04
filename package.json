@@ -1,5 +1,5 @@
 {
-  "name": "latch",
+  "name": "end",
   "private": true,
   "version": "0.1.2",
   "description": "A fast, keyboard-driven app launcher for macOS and Linux.",
@@ -7,12 +7,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/enesdurmus/latch.git"
+    "url": "git+https://github.com/enesdurmus/End.git"
   },
   "bugs": {
-    "url": "https://github.com/enesdurmus/latch/issues"
+    "url": "https://github.com/enesdurmus/End/issues"
   },
-  "homepage": "https://github.com/enesdurmus/latch#readme",
+  "homepage": "https://github.com/enesdurmus/End#readme",
   "type": "module",
   "scripts": {
     "dev": "vite",

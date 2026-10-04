@@ -1,4 +1,4 @@
-# Contributing to Latch
+# Contributing to End
 
 Thanks for taking the time to contribute!
 
@@ -30,4 +30,4 @@ Both suites should pass before opening a PR.
 
 ## Reporting bugs / requesting features
 
-Use the issue templates on the [Issues](https://github.com/enesdurmus/latch/issues) page.
+Use the issue templates on the [Issues](https://github.com/enesdurmus/End/issues) page.

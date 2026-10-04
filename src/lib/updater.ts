@@ -7,7 +7,7 @@ export async function checkForUpdates(): Promise<void> {
   if (!update) return;
 
   const shouldInstall = await ask(
-    `Latch ${update.version} is available. Restart now to install it?`,
+    `End ${update.version} is available. Restart now to install it?`,
     { title: "Update available", kind: "info" }
   );
   if (!shouldInstall) return;

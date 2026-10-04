@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Latch",
+  "productName": "End",
   "version": "0.1.2",
-  "identifier": "com.enesdurmus.latch",
+  "identifier": "com.enesdurmus.end",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -67,7 +67,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU0MEJCNUQ4NUY2MEE2REUKUldUZXBtQmYyTFVMNU4vL1JZcFU0WkUxZmU5V25TSHBJVldYVTZTTFdFRHFTU1JrNEZDcVd3MWEK",
       "endpoints": [
-        "https://github.com/enesdurmus/latch/releases/latest/download/latest.json"
+        "https://github.com/enesdurmus/End/releases/latest/download/latest.json"
       ]
     }
   }

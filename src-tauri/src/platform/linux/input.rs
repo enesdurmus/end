@@ -130,7 +130,7 @@ pub(super) mod portal {
     /// The restore token lets the compositor skip the dialog on later runs.
     fn token_path() -> std::path::PathBuf {
         super::super::env_dir("XDG_DATA_HOME", super::super::home().join(".local/share"))
-            .join("latch/remote-desktop-token")
+            .join("end/remote-desktop-token")
     }
 
     async fn connect() -> ashpd::Result<Live> {

@@ -16,7 +16,7 @@ What you expected to happen instead.
 
 **Environment**
 - OS: [e.g. macOS 15, Ubuntu 24.04]
-- Latch version: [e.g. 0.1.0]
+- End version: [e.g. 0.1.0]
 - Install method: [e.g. dmg, AppImage, deb]
 
 **Additional context**

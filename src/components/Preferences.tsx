@@ -230,7 +230,7 @@ export function Preferences() {
     <Window variant="flat" className="p-5">
       <h3 className="m-0 mb-4 text-[15px] font-semibold">Preferences</h3>
 
-      <HotkeyRow label="Toggle Latch" kind="toggle" value={prefs.toggle_shortcut}
+      <HotkeyRow label="Toggle End" kind="toggle" value={prefs.toggle_shortcut}
         onChanged={(accel) => setPrefs({ ...prefs, toggle_shortcut: accel })} />
       <HotkeyRow label="Clipboard History" kind="clipboard" value={prefs.clipboard_shortcut}
         onChanged={(accel) => setPrefs({ ...prefs, clipboard_shortcut: accel })} />
