@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { TranslationEntry } from "../types";
+import { Meaning, TranslationEntry } from "../types";
 import { Mode } from "../lib/navigation";
 
-type Raw = { text: string; detected: string };
+type Raw = { text: string; detected: string; alternatives: string[]; meanings: Meaning[] };
 
 // ponytail: same shape as useFileSearch — debounce + cancel flag, no request library
 export function useTranslate(mode: Mode, query: string, source: string, target: string) {
   const [entry, setEntry] = useState<TranslationEntry | null>(null);
+  const [alternatives, setAlternatives] = useState<string[]>([]);
+  const [meanings, setMeanings] = useState<Meaning[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const text = mode === "translate" ? query.trim() : "";
 
   useEffect(() => {
-    if (!text) { setEntry(null); setError(""); setLoading(false); return; }
+    if (!text) { setEntry(null); setAlternatives([]); setMeanings([]); setError(""); setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
     setError("");
@@ -24,11 +26,15 @@ export function useTranslate(mode: Mode, query: string, source: string, target: 
         .then((r) => {
           if (cancelled) return;
           setEntry({ source: text, translated: r.text, from: r.detected, to: target });
+          setAlternatives(r.alternatives);
+          setMeanings(r.meanings);
           setError("");
         })
         .catch((e) => {
           if (cancelled) return;
           setEntry(null);
+          setAlternatives([]);
+          setMeanings([]);
           setError(String(e));
         })
         .finally(() => { if (!cancelled) setLoading(false); });
@@ -36,5 +42,5 @@ export function useTranslate(mode: Mode, query: string, source: string, target: 
     return () => { cancelled = true; clearTimeout(t); };
   }, [text, source, target]);
 
-  return { entry, loading, error };
+  return { entry, alternatives, meanings, loading, error };
 }

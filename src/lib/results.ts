@@ -123,6 +123,11 @@ export function translationToResult(e: TranslationEntry, actions: RunActions): R
   };
 }
 
+// One of the other renderings of the live translation; using it records and copies it.
+export function alternativeToResult(e: TranslationEntry, alt: string, i: number, actions: RunActions): Result {
+  return { ...translationToResult({ ...e, translated: alt }, actions), id: "tr:alt:" + i, subtitle: "Alternative" };
+}
+
 // Narrower than RunActions: App wires these to useGifs's wrappers, which own
 // the library/remote transition and the action-error channel.
 export type GifActions = {

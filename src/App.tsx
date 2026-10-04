@@ -6,6 +6,7 @@ import { ClipboardView } from "./components/ClipboardView";
 import { TranslateView } from "./components/TranslateView";
 import { GifList } from "./components/GifList";
 import { Tabs, Tab, TABS } from "./components/Tabs";
+import { LangBar } from "./components/LangBar";
 import { Detail } from "./components/Detail";
 import { StatusBar } from "./components/StatusBar";
 import { Preferences } from "./components/Preferences";
@@ -14,7 +15,7 @@ import { Window } from "./components/ui/Window";
 import { Split } from "./components/ui/Split";
 import { buildCommands } from "./commands";
 import { runActions } from "./lib/actions";
-import { buildResults, langToResult, translationToResult, gifToResult } from "./lib/results";
+import { buildResults, langToResult, translationToResult, alternativeToResult, gifToResult } from "./lib/results";
 import { LANGUAGES, languageName } from "./lib/languages";
 import { navReducer, initialNav } from "./lib/navigation";
 import { checkForUpdates } from "./lib/updater";
@@ -49,7 +50,7 @@ export default function App() {
   const files = useFileSearch(runActions, mode, query);
   const { clips, load: loadClips } = useClipboard(runActions);
   const { history, load: loadHistory, clear: clearHistory } = useTranslateHistory(runActions);
-  const { entry, loading, error } = useTranslate(mode, query, source, target);
+  const { entry, alternatives, meanings, loading, error } = useTranslate(mode, query, source, target);
   const {
     gifs: gifList,
     error: gifError,
@@ -82,14 +83,22 @@ export default function App() {
     );
   }, []);
 
+  // like pickTarget, but for the dropdown: it must not touch the query the picker borrows
+  const changeTarget = (code: string) => {
+    dispatch({ type: "setLangs", source, target: code });
+    invoke("set_translate_prefs", { target: code, provider: null }).catch((e) => console.error(e));
+  };
+
   const commands = useMemo(
     () => buildCommands(dispatch, loadClips, enterTranslate, loadGifs),
     [loadClips, enterTranslate, loadGifs]
   );
   const langs = useMemo(() => LANGUAGES.map((l) => langToResult(l, pickTarget)), [pickTarget]);
   const translation = useMemo(
-    () => (entry ? [translationToResult(entry, runActions)] : []),
-    [entry]
+    () => entry
+      ? [translationToResult(entry, runActions), ...alternatives.map((a, i) => alternativeToResult(entry, a, i, runActions))]
+      : [],
+    [entry, alternatives]
   );
   // useGifs owns the library/remote state transition; here we just move the
   // selection onto the new local row once it lands, so Enter right after
@@ -218,13 +227,23 @@ export default function App() {
         placeholder={picking ? "Search languages..." : PLACEHOLDER[mode]}
         onChange={(q) => dispatch({ type: "setQuery", query: q })}
       />
+      {mode === "translate" && !picking && (
+        <LangBar
+          source={source}
+          target={target}
+          detected={typing && entry ? entry.from : undefined}
+          onSource={(code) => dispatch({ type: "setLangs", source: code, target })}
+          onTarget={changeTarget}
+          onSwap={() => dispatch({ type: "swap", detected: entry?.from ?? "en" })}
+        />
+      )}
       {showTabs && <Tabs active={activeTab} onPick={pickTab} onSettings={() => dispatch({ type: "openSettings" })} />}
       {picking ? (
         <div className="flex flex-col flex-1 min-h-0 px-4 pb-3">
           <ResultList results={results} selected={selected} onSelect={onSelect} />
         </div>
       ) : typing ? (
-        <TranslateView entry={entry} loading={loading} error={error} />
+        <TranslateView results={results} selected={selected} onSelect={onSelect} entry={entry} meanings={meanings} loading={loading} error={error} />
       ) : mode === "clipboard" || mode === "translate" ? (
         <ClipboardView results={results} selected={selected} onSelect={onSelect} />
       ) : mode === "gif" ? (
