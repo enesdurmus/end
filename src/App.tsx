@@ -1,16 +1,21 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { SearchBar } from "./components/SearchBar";
 import { ResultList } from "./components/ResultList";
 import { ClipboardView } from "./components/ClipboardView";
 import { TranslateView } from "./components/TranslateView";
 import { GifList } from "./components/GifList";
+import { Tabs, Tab, TABS } from "./components/Tabs";
+import { LangBar } from "./components/LangBar";
+import { Detail } from "./components/Detail";
 import { StatusBar } from "./components/StatusBar";
+import { Preferences } from "./components/Preferences";
 import { SnippetManager } from "./components/SnippetManager";
 import { Window } from "./components/ui/Window";
+import { Split } from "./components/ui/Split";
 import { buildCommands } from "./commands";
 import { runActions } from "./lib/actions";
-import { buildResults, langToResult, translationToResult, gifToResult } from "./lib/results";
+import { buildResults, langToResult, translationToResult, alternativeToResult, gifToResult } from "./lib/results";
 import { LANGUAGES, languageName } from "./lib/languages";
 import { navReducer, initialNav } from "./lib/navigation";
 import { checkForUpdates } from "./lib/updater";
@@ -23,7 +28,9 @@ import { useTranslateHistory } from "./hooks/useTranslateHistory";
 import { useGifs } from "./hooks/useGifs";
 import { useLauncherEvents } from "./hooks/useLauncherEvents";
 import { useKeyboardNav } from "./hooks/useKeyboardNav";
-import { Gif } from "./types";
+import { Gif, Result } from "./types";
+
+const TAB_TYPE: Partial<Record<Tab, Result["type"]>> = { Apps: "app", Commands: "command", Snippets: "snippet" };
 
 const PLACEHOLDER = {
   clipboard: "Search clipboard history...",
@@ -36,14 +43,14 @@ const PLACEHOLDER = {
 export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [nav, dispatch] = useReducer(navReducer, initialNav);
-  const { mode, query, selected, managing, picking, source, target } = nav;
+  const { mode, query, selected, screen, picking, source, target } = nav;
 
   const apps = useApps(runActions);
-  const snips = useSnippets(runActions, managing);
+  const snips = useSnippets(runActions, screen === "snippets");
   const files = useFileSearch(runActions, mode, query);
   const { clips, load: loadClips } = useClipboard(runActions);
   const { history, load: loadHistory, clear: clearHistory } = useTranslateHistory(runActions);
-  const { entry, loading, error } = useTranslate(mode, query, source, target);
+  const { entry, alternatives, meanings, loading, error } = useTranslate(mode, query, source, target);
   const {
     gifs: gifList,
     error: gifError,
@@ -76,14 +83,22 @@ export default function App() {
     );
   }, []);
 
+  // like pickTarget, but for the dropdown: it must not touch the query the picker borrows
+  const changeTarget = (code: string) => {
+    dispatch({ type: "setLangs", source, target: code });
+    invoke("set_translate_prefs", { target: code, provider: null }).catch((e) => console.error(e));
+  };
+
   const commands = useMemo(
     () => buildCommands(dispatch, loadClips, enterTranslate, loadGifs),
     [loadClips, enterTranslate, loadGifs]
   );
   const langs = useMemo(() => LANGUAGES.map((l) => langToResult(l, pickTarget)), [pickTarget]);
   const translation = useMemo(
-    () => (entry ? [translationToResult(entry, runActions)] : []),
-    [entry]
+    () => entry
+      ? [translationToResult(entry, runActions), ...alternatives.map((a, i) => alternativeToResult(entry, a, i, runActions))]
+      : [],
+    [entry, alternatives]
   );
   // useGifs owns the library/remote state transition; here we just move the
   // selection onto the new local row once it lands, so Enter right after
@@ -123,7 +138,8 @@ export default function App() {
       pendingSelectId.current = null;
     }
   }, [mode, gifResults]);
-  const results = useMemo(
+  const [tab, setTab] = useState<Tab>("All");
+  const all = useMemo(
     () =>
       buildResults(
         mode,
@@ -133,18 +149,43 @@ export default function App() {
       ),
     [mode, query, picking, commands, apps, snips, clips, files, langs, translation, history, gifResults]
   );
+  // Apps/Commands/Snippets filter the root list; Files/Clipboard are real modes.
+  // The tab bar stays up in those three screens so arrows can walk across it.
+  const showTabs = !picking && (mode === "root" || mode === "files" || mode === "clipboard");
+  const activeTab: Tab = mode === "files" ? "Files" : mode === "clipboard" ? "Clipboard" : tab;
+  const results = useMemo(() => {
+    const type = TAB_TYPE[tab];
+    return mode === "root" && !picking && type ? all.filter((r) => r.type === type) : all;
+  }, [all, mode, picking, tab]);
+  const pickTab = (t: Tab) => {
+    if (t === activeTab) return;
+    const cmd = t === "Files" ? "cmd:files" : t === "Clipboard" ? "cmd:clipboard" : null;
+    if (cmd) { commands.find((c) => c.id === cmd)?.run(); return; }
+    if (mode !== "root") dispatch({ type: "goRoot" });
+    setTab(t);
+  };
+  const onSelect = (index: number) => dispatch({ type: "selectIndex", index });
+  const stepTab = (delta: number) => {
+    const next = TABS[TABS.indexOf(activeTab) + delta];
+    if (next) pickTab(next);
+  };
 
   useLauncherEvents(dispatch, loadClips);
+  const typing = mode === "translate" && !!query.trim();
   useKeyboardNav({
     dispatch, results, selected, mode, query, picking,
     detected: entry?.from ?? "en",
     onClearHistory: clearHistory,
     inputRef,
+    rowShortcuts: picking || !(mode === "gif" || typing),
+    overlay: screen !== "launcher",
+    onTab: showTabs ? stepTab : null,
   });
 
-  if (managing) return <SnippetManager onClose={() => dispatch({ type: "closeManage" })} />;
+  const close = () => dispatch({ type: "goRoot" });
+  if (screen === "snippets") return <SnippetManager />;
+  if (screen === "settings") return <Preferences onClose={close} />;
 
-  const typing = mode === "translate" && !!query.trim();
   // nav's `source` stays "auto" so the next request keeps auto-detecting;
   // the status bar shows what the backend actually detected
   const displaySource = typing && entry ? entry.from : source;
@@ -168,10 +209,10 @@ export default function App() {
               (gifList.some((g) => g.source === "remote") ? "Powered by KLIPY" : ""),
             hints: [["Paste", "↵"], ["Save", "⌘↵"], ["Folder", "⌘O"], ["Back", "esc"]],
           }
-        : { left: `${results.length} results`, hints: [["Open", "↵"], ["Close", "esc"]] };
+        : { left: `${results.length} results`, hints: [["Navigate", "↑↓"], ["Tabs", "←→"], ["Open", "↵"], ["Close", "esc"]] };
 
   return (
-    <Window variant="floating">
+    <Window>
       <SearchBar
         inputRef={inputRef}
         value={query}
@@ -186,16 +227,34 @@ export default function App() {
         placeholder={picking ? "Search languages..." : PLACEHOLDER[mode]}
         onChange={(q) => dispatch({ type: "setQuery", query: q })}
       />
+      {mode === "translate" && !picking && (
+        <LangBar
+          source={source}
+          target={target}
+          detected={typing && entry ? entry.from : undefined}
+          onSource={(code) => dispatch({ type: "setLangs", source: code, target })}
+          onTarget={changeTarget}
+          onSwap={() => dispatch({ type: "swap", detected: entry?.from ?? "en" })}
+        />
+      )}
+      {showTabs && <Tabs active={activeTab} onPick={pickTab} onSettings={() => dispatch({ type: "openSettings" })} />}
       {picking ? (
-        <ResultList results={results} selected={selected} />
+        <div className="flex flex-col flex-1 min-h-0 px-4 pb-3">
+          <ResultList results={results} selected={selected} onSelect={onSelect} />
+        </div>
       ) : typing ? (
-        <TranslateView entry={entry} loading={loading} error={error} />
+        <TranslateView results={results} selected={selected} onSelect={onSelect} entry={entry} meanings={meanings} loading={loading} error={error} />
       ) : mode === "clipboard" || mode === "translate" ? (
-        <ClipboardView results={results} selected={selected} />
+        <ClipboardView results={results} selected={selected} onSelect={onSelect} />
       ) : mode === "gif" ? (
-        <GifList results={results} selected={selected} />
+        <div className="flex flex-col flex-1 min-h-0 px-4 pb-3">
+          <GifList results={results} selected={selected} onSelect={onSelect} />
+        </div>
       ) : (
-        <ResultList results={results} selected={selected} />
+        <Split
+          left={<ResultList results={results} selected={selected} onSelect={onSelect} />}
+          right={<Detail result={results[selected]} />}
+        />
       )}
       <StatusBar left={status.left} hints={status.hints} />
     </Window>

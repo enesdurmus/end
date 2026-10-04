@@ -17,22 +17,22 @@ test("move on empty list stays at 0", () => {
   expect(navReducer(initialNav, { type: "move", delta: 1, max: 0 }).selected).toBe(0);
 });
 
-test("goMode enters a mode, clears query, exits managing", () => {
-  const s: NavState = { ...initialNav, mode: "root", query: "x", selected: 4, managing: true };
+test("goMode enters a mode, clears query, leaves the form screens", () => {
+  const s: NavState = { ...initialNav, mode: "root", query: "x", selected: 4, screen: "snippets" };
   expect(navReducer(s, { type: "goMode", mode: "clipboard" })).toMatchObject({
-    mode: "clipboard", query: "", selected: 0, managing: false,
+    mode: "clipboard", query: "", selected: 0, screen: "launcher",
   });
 });
 
 test("goRoot resets to root", () => {
-  const s: NavState = { ...initialNav, mode: "files", query: "x", selected: 2, managing: false };
+  const s: NavState = { ...initialNav, mode: "files", query: "x", selected: 2, screen: "launcher" };
   expect(navReducer(s, { type: "goRoot" })).toMatchObject({ mode: "root", query: "", selected: 0 });
 });
 
-test("manage / closeManage toggle the snippet manager", () => {
+test("manage opens the snippet manager and goRoot leaves it", () => {
   const opened = navReducer(initialNav, { type: "manage" });
-  expect(opened).toMatchObject({ managing: true, query: "" });
-  expect(navReducer(opened, { type: "closeManage" }).managing).toBe(false);
+  expect(opened).toMatchObject({ screen: "snippets", query: "" });
+  expect(navReducer(opened, { type: "goRoot" }).screen).toBe("launcher");
 });
 
 test("setLangs seeds the pair from persisted preferences", () => {
@@ -99,4 +99,10 @@ test("leaving a mode clears the picker's stashed query", () => {
 test("selectIndex sets the selection directly", () => {
   const s: NavState = { ...initialNav, mode: "gif", selected: 3 };
   expect(navReducer(s, { type: "selectIndex", index: 0 }).selected).toBe(0);
+});
+
+test("openSettings shows the preferences screen; goRoot leaves it", () => {
+  const s = navReducer({ ...initialNav, picking: true, query: "x" }, { type: "openSettings" });
+  expect(s).toMatchObject({ screen: "settings", picking: false, query: "" });
+  expect(navReducer(s, { type: "goRoot" }).screen).toBe("launcher");
 });

@@ -11,6 +11,7 @@ export function useLauncherEvents(dispatch: Dispatch<NavAction>, loadClips: () =
   useEffect(() => {
     const uns = [
       listen("focus-search", () => { dispatch({ type: "goRoot" }); showAfterPaint(); }),
+      listen("open-settings", () => { dispatch({ type: "openSettings" }); showAfterPaint(); }),
       listen("clipboard-mode", () => {
         dispatch({ type: "goMode", mode: "clipboard" });
         loadClips();

@@ -25,6 +25,9 @@ export type TranslationEntry = {
   to: string;
 };
 
+// Dictionary entry for a single word, e.g. { pos: "noun", terms: ["run", "jog"] }
+export type Meaning = { pos: string; terms: string[] };
+
 export type Gif = {
   id: string;
   title: string;

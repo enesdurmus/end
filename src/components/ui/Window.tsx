@@ -1,26 +1,13 @@
 import { ReactNode } from "react";
 
-export function Window({
-  variant,
-  className = "",
-  children,
-}: {
-  variant: "floating" | "flat";
-  className?: string;
-  children: ReactNode;
-}) {
+export function Window({ className = "", children }: { className?: string; children: ReactNode }) {
+  // The panel is the OS window minus this gutter, which is just room for the drop
+  // shadow. Size lives in tauri.conf.json only; everything inside is relative to it.
   return (
-    <div
-      className={
-        "flex flex-col h-screen text-fg bg-bg " +
-        "border border-hair font-[-apple-system,BlinkMacSystemFont,'SF_Pro_Text',sans-serif] " +
-        (variant === "floating"
-          ? "overflow-hidden rounded-window backdrop-blur-window "
-          : "overflow-y-auto ") +
-        className
-      }
-    >
-      {children}
+    <div className="h-screen p-10">
+      <div className={`flex flex-col h-full text-fg overflow-hidden rounded-window window-glass ${className}`}>
+        {children}
+      </div>
     </div>
   );
 }

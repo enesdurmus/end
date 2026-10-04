@@ -46,7 +46,7 @@ test("favouriting selects the gif that was favourited even when it re-sorts behi
 
   // enter gif mode via the "Search GIFs" command
   fireEvent.change(getInput(), { target: { value: "gif" } });
-  await waitFor(() => expect(screen.queryByText("Search GIFs")).not.toBeNull());
+  await waitFor(() => expect(screen.queryAllByText("Search GIFs").length).toBeGreaterThan(0));
   fireEvent.keyDown(window, { key: "Enter" });
   await waitFor(() => expect(invoke).toHaveBeenCalledWith("gif_library"));
 
@@ -66,7 +66,7 @@ test("favouriting selects the gif that was favourited even when it re-sorts behi
   // and "band" still sorts first — selectIndex:0 would land on the wrong gif
   await waitFor(() => {
     const rows = Array.from(document.querySelectorAll("li > div"));
-    const selected = rows.find((row) => row.className.split(/\s+/).includes("bg-sel"));
+    const selected = rows.find((row) => row.className.split(/\s+/).includes("surface-row"));
     expect(selected?.textContent).toContain("banned gif");
   });
 });
@@ -94,7 +94,7 @@ test("leaving gif mode before the favourite resolves does not move the selection
   render(<App />);
 
   fireEvent.change(getInput(), { target: { value: "gif" } });
-  await waitFor(() => expect(screen.queryByText("Search GIFs")).not.toBeNull());
+  await waitFor(() => expect(screen.queryAllByText("Search GIFs").length).toBeGreaterThan(0));
   fireEvent.keyDown(window, { key: "Enter" });
   await waitFor(() => expect(invoke).toHaveBeenCalledWith("gif_library"));
 
@@ -113,7 +113,7 @@ test("leaving gif mode before the favourite resolves does not move the selection
   // move off index 0 so a leaked selectIndex:0 (the saved gif's post-resolve
   // position) wouldn't be masked by already sitting there
   fireEvent.keyDown(window, { key: "ArrowDown" });
-  const selectedBefore = document.querySelector("li > div.bg-sel")?.textContent;
+  const selectedBefore = document.querySelector("li > div.surface-row")?.textContent;
 
   // now let the stale favorite resolve; the gif list state update it triggers
   // is exactly what used to fire the leaked selectIndex dispatch. Draining a
@@ -126,6 +126,6 @@ test("leaving gif mode before the favourite resolves does not move the selection
     for (let i = 0; i < 5; i++) await Promise.resolve();
   });
 
-  const selectedAfter = document.querySelector("li > div.bg-sel")?.textContent;
+  const selectedAfter = document.querySelector("li > div.surface-row")?.textContent;
   expect(selectedAfter).toBe(selectedBefore);
 });

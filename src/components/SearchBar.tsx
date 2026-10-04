@@ -1,4 +1,5 @@
 import { Ref } from "react";
+import { Icon } from "./ui/Icon";
 
 export function SearchBar({
   value,
@@ -14,20 +15,16 @@ export function SearchBar({
   inputRef?: Ref<HTMLInputElement>;
 }) {
   return (
-    <div className="flex-none flex items-center gap-3 px-5 border-b border-hair">
-      <svg aria-hidden="true" className="text-fg-dim flex-none" width="18" height="18" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-        <circle cx="11" cy="11" r="7" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
+    <div className="flex-none mx-4 mt-3.5 h-[42px] flex items-center gap-3 px-3.5 rounded-[10px] surface-field transition-colors focus-within:brightness-125">
+      <Icon name="search" size={20} className="text-[#c0c6dc] flex-none" />
       {badge && (
-        <span className="flex-none px-2.5 py-[3px] rounded-md text-[13px] font-medium bg-sel text-fg whitespace-nowrap">
+        <span className="flex-none px-2 py-[2px] rounded-md text-[12px] font-medium bg-sel text-fg whitespace-nowrap">
           {badge}
         </span>
       )}
       <input
         ref={inputRef}
-        className="w-full border-0 outline-none bg-transparent text-fg text-xl py-4 font-normal placeholder:text-fg-dim"
+        className="w-full h-full border-0 outline-none bg-transparent text-fg text-[15px] font-normal placeholder:text-[#7e87a8]"
         autoFocus
         placeholder={placeholder}
         value={value}

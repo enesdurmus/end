@@ -28,6 +28,18 @@ export function fileToResult(f: RawFile, actions: RunActions): Result {
   };
 }
 
+export const KIND: Record<Result["type"], string> = {
+  app: "Application", file: "File", clipboard: "Clipboard", snippet: "Snippet",
+  command: "Command", language: "Language", translation: "Translation", gif: "GIF",
+};
+
+// the grey second line of a list row
+export function describe(r: Result): string {
+  if (r.type === "app") return KIND.app;
+  if (r.type === "file") return `File • ${r.subtitle?.split("/").slice(0, -1).join("/") || "/"}`;
+  return r.subtitle || KIND[r.type];
+}
+
 export const basename = (p: string) => p.split("/").pop() || p;
 
 export function formatBytes(n: number): string {
@@ -109,6 +121,11 @@ export function translationToResult(e: TranslationEntry, actions: RunActions): R
     run: () => { actions.record(e); return actions.copy(e.translated); },
     altRun: () => { actions.record(e); return actions.paste(e.translated); },
   };
+}
+
+// One of the other renderings of the live translation; using it records and copies it.
+export function alternativeToResult(e: TranslationEntry, alt: string, i: number, actions: RunActions): Result {
+  return { ...translationToResult({ ...e, translated: alt }, actions), id: "tr:alt:" + i, subtitle: "Alternative" };
 }
 
 // Narrower than RunActions: App wires these to useGifs's wrappers, which own

@@ -24,10 +24,20 @@ pub enum Provider {
     Google,
 }
 
+/// Dictionary entry for a single word: "noun" -> ["run", "jog"].
+#[derive(Serialize, Debug, PartialEq)]
+pub struct Meaning {
+    pub pos: String,
+    pub terms: Vec<String>,
+}
+
 #[derive(Serialize, Debug, PartialEq)]
 pub struct Translation {
     pub text: String,
     pub detected: String,
+    /// Other renderings of the same text (only when it is a single segment).
+    pub alternatives: Vec<String>,
+    pub meanings: Vec<Meaning>,
 }
 
 pub async fn fetch(
@@ -48,7 +58,9 @@ async fn google(text: &str, from: &str, to: &str) -> Result<Translation, String>
             ("client", "gtx"),
             ("sl", from),
             ("tl", to),
-            ("dt", "t"),
+            ("dt", "t"),  // translation
+            ("dt", "at"), // alternatives
+            ("dt", "bd"), // dictionary
             ("q", text),
         ])
         .send()
@@ -76,7 +88,9 @@ fn status_error_message(status: reqwest::StatusCode) -> String {
     }
 }
 
-/// `[[["hello","merhaba",..],["world","dünya",..]], null, "tr", ...]`
+/// `[[["hello","merhaba",..],["world","dünya",..]], dictionary, "tr", .., .., alternatives, ..]`
+/// where dictionary is `[["noun", ["merhaba", ..], ..], ..]` and alternatives is
+/// `[[source, _, [["merhaba", ..], ["selam", ..]], ..]]`, one entry per segment.
 pub fn parse_google(body: &str) -> Result<Translation, String> {
     let v: serde_json::Value =
         serde_json::from_str(body).map_err(|e| format!("bad translate response: {e}"))?;
@@ -104,7 +118,49 @@ pub fn parse_google(body: &str) -> Result<Translation, String> {
         .unwrap_or("auto")
         .to_string();
 
-    Ok(Translation { text, detected })
+    // Both extras are optional garnish: a shape we don't recognise just means none.
+    let strings = |v: Option<&serde_json::Value>| -> Vec<String> {
+        v.and_then(|a| a.as_array())
+            .map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect())
+            .unwrap_or_default()
+    };
+
+    let meanings = v
+        .get(1)
+        .and_then(|d| d.as_array())
+        .map(|entries| {
+            entries
+                .iter()
+                .map(|e| Meaning {
+                    pos: e.get(0).and_then(|p| p.as_str()).unwrap_or_default().to_string(),
+                    terms: strings(e.get(1)),
+                })
+                .filter(|m| !m.terms.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let segments = v.get(5).and_then(|a| a.as_array());
+    let alternatives = match segments {
+        Some(s) if s.len() == 1 => s[0]
+            .get(2)
+            .and_then(|a| a.as_array())
+            .map(|alts| {
+                let mut seen = vec![text.trim().to_string()];
+                for a in alts {
+                    if let Some(t) = a.get(0).and_then(|t| t.as_str()) {
+                        if !seen.iter().any(|x| x == t.trim()) {
+                            seen.push(t.trim().to_string());
+                        }
+                    }
+                }
+                seen.split_off(1)
+            })
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
+
+    Ok(Translation { text, detected, alternatives, meanings })
 }
 
 #[cfg(test)]
@@ -124,6 +180,22 @@ mod tests {
         let body = r#"[[["Hello. ","Merhaba. ",null,null,3],["How are you?","Nasılsın?",null,null,3]],null,"tr",null,null,null,null,[]]"#;
         let t = parse_google(body).unwrap();
         assert_eq!(t.text, "Hello. How are you?");
+    }
+
+    #[test]
+    fn reads_alternatives_and_meanings() {
+        let body = r#"[[["koşmak","run",null,null,10]],[["verb",["koşmak","çalıştırmak"],[["koşmak",["run"],null,0.5]],"run",1]],"en",null,null,[["run",null,[["koşmak",1000,true,false],["çalıştırmak",900,true,false],["koşu",800,true,false]],[[0,3]],"run",0,0]]]"#;
+        let t = parse_google(body).unwrap();
+        assert_eq!(t.text, "koşmak");
+        assert_eq!(t.alternatives, vec!["çalıştırmak", "koşu"]); // main one dropped
+        assert_eq!(t.meanings, vec![Meaning { pos: "verb".into(), terms: vec!["koşmak".into(), "çalıştırmak".into()] }]);
+    }
+
+    #[test]
+    fn multi_segment_text_has_no_alternatives() {
+        let body = r#"[[["A. ","a",null,null,1],["B.","b",null,null,1]],null,"en",null,null,[["A.",null,[["x",1]]],["B.",null,[["y",1]]]]]"#;
+        let t = parse_google(body).unwrap();
+        assert!(t.alternatives.is_empty() && t.meanings.is_empty());
     }
 
     #[test]
