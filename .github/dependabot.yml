@@ -7,6 +7,9 @@ updates:
     commit-message:
       prefix: "deps"
       prefix-development: "chore"
+    groups:
+      tauri:
+        patterns: ["@tauri-apps/*"]
 
   - package-ecosystem: "cargo"
     directory: "/src-tauri"
@@ -15,6 +18,9 @@ updates:
     commit-message:
       prefix: "deps"
       prefix-development: "chore"
+    groups:
+      tauri:
+        patterns: ["tauri", "tauri-*"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
