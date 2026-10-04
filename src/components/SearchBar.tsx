@@ -1,6 +1,5 @@
 import { Ref } from "react";
 import { Icon } from "./ui/Icon";
-import { Kbd } from "./ui/Kbd";
 
 export function SearchBar({
   value,
@@ -31,7 +30,6 @@ export function SearchBar({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
-      <Kbd>⌘K</Kbd>
     </div>
   );
 }

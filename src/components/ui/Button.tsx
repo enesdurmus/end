@@ -12,7 +12,7 @@ export function Button({
         "inline-flex items-center justify-center gap-2 rounded-[10px] px-3.5 py-2 text-[13px] cursor-pointer transition-colors " +
         (variant === "primary"
           ? "surface-active text-white hover:brightness-110 "
-          : "surface-chip hover:text-fg hover:bg-[#7d78ff]/20 ") +
+          : "surface-chip hover:text-fg hover:bg-[#aab4d6]/20 ") +
         className
       }
     />

@@ -5,8 +5,8 @@
   --color-bg: #0a0e1d;
   --color-fg: #dfe3f2;
   --color-fg-dim: #8a93b2;
-  --color-sel: rgba(125, 120, 255, 0.12);
-  --color-hair: rgba(125, 120, 255, 0.12);
+  --color-sel: rgba(170, 180, 215, 0.12);
+  --color-hair: rgba(170, 180, 215, 0.12);
   --color-accent: #5b64ff;
   --color-success: #40c057;
   --color-danger: #e03131;
@@ -19,15 +19,15 @@ html, body, #root { margin: 0; height: 100%; background: transparent; }
 
 /* every surface is just a gradient plus a shadow */
 @utility window-glass {
-  background: linear-gradient(160deg, #1f2756 0%, #0f1432 75%);
-  box-shadow: 0 0 36px rgba(110, 90, 255, 0.3), 0 30px 80px rgba(0, 0, 0, 0.6);
+  background: linear-gradient(160deg, #232734 0%, #0f1219 75%);
+  box-shadow: 0 0 36px rgba(150, 160, 200, 0.2), 0 30px 80px rgba(0, 0, 0, 0.6);
 }
 @utility surface-field {
-  background: linear-gradient(180deg, rgba(125, 120, 255, 0.14), rgba(125, 120, 255, 0.06));
+  background: linear-gradient(180deg, rgba(170, 180, 215, 0.14), rgba(170, 180, 215, 0.06));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 @utility surface-chip {
-  background: linear-gradient(180deg, rgba(125, 120, 255, 0.22), rgba(125, 120, 255, 0.1));
+  background: linear-gradient(180deg, rgba(170, 180, 215, 0.22), rgba(170, 180, 215, 0.1));
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   color: #c0c6dc;
 }
@@ -40,14 +40,14 @@ html, body, #root { margin: 0; height: 100%; background: transparent; }
   box-shadow: 0 4px 14px rgba(70, 50, 220, 0.3);
 }
 @utility card {
-  background: linear-gradient(180deg, rgba(125, 120, 255, 0.08), rgba(125, 120, 255, 0.03));
+  background: linear-gradient(180deg, rgba(170, 180, 215, 0.08), rgba(170, 180, 215, 0.03));
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
   border-radius: 12px;
 }
 
 /* opaque dropdown list (Select): it floats over other content, so no transparency */
 @utility popover {
-  background: linear-gradient(180deg, #232b63, #161c45);
+  background: linear-gradient(180deg, #2b3040, #1a1e2b);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
   border-radius: 10px;
 }
@@ -64,4 +64,4 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
 
 /* ince scrollbar (::-webkit-scrollbar utility'lenemiyor) */
 .scroll-thin::-webkit-scrollbar { width: 6px; }
-.scroll-thin::-webkit-scrollbar-thumb { background: rgba(125, 120, 255, 0.22); border-radius: 3px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: rgba(170, 180, 215, 0.22); border-radius: 3px; }

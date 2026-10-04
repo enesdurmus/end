@@ -31,12 +31,6 @@ export function useKeyboardNav({
       // any printable key while the input isn't focused -> send it to the search box
       if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) inputRef.current?.focus();
 
-      if (e.metaKey && e.key === "k") {
-        e.preventDefault();
-        inputRef.current?.focus();
-        inputRef.current?.select();
-        return;
-      }
       if (rowShortcuts && e.metaKey && /^[1-9]$/.test(e.key) && Number(e.key) <= ROW_SHORTCUTS) {
         const r = results[Number(e.key) - 1];
         if (r) { e.preventDefault(); r.run(); }
