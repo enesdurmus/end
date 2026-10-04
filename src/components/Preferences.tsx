@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Window } from "./ui/Window";
 import { Button } from "./ui/Button";
 import { Field } from "./ui/Field";
 import { Input } from "./ui/Input";
 import { Select } from "./ui/Select";
+import { Icon } from "./ui/Icon";
+import { StatusBar } from "./StatusBar";
 import { LANGUAGES } from "../lib/languages";
 
 type Prefs = {
@@ -147,21 +148,17 @@ function TranslateRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Part
       <Field label="Translate To">
         <Select
           value={prefs.translate_target}
-          onChange={(e) => commit({ translate_target: e.target.value })}
-        >
-          {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>{l.name}</option>
-          ))}
-        </Select>
+          options={LANGUAGES.map((l) => ({ value: l.code, label: l.name }))}
+          onChange={(v) => commit({ translate_target: v })}
+        />
       </Field>
       <Field label="Translation Engine" error={error}>
         <Select
           value={prefs.translate_provider}
-          onChange={(e) => commit({ translate_provider: e.target.value })}
-        >
-          {/* mirrors the Provider enum in src-tauri/src/translate.rs */}
-          <option value="google">Google</option>
-        </Select>
+          // mirrors the Provider enum in src-tauri/src/translate.rs
+          options={[{ value: "google", label: "Google" }]}
+          onChange={(v) => commit({ translate_provider: v })}
+        />
       </Field>
     </>
   );
@@ -193,7 +190,7 @@ function GifRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Pr
   );
 }
 
-export function Preferences() {
+export function Preferences({ onClose }: { onClose: () => void }) {
   const [prefs, setPrefs] = useState<Prefs | null>(null);
   const [accessible, setAccessible] = useState<boolean | null>(null);
 
@@ -204,20 +201,17 @@ export function Preferences() {
     recheck();
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") getCurrentWindow().hide();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   if (!prefs) return null;
 
   return (
-    <Window variant="flat" className="p-5">
-      <h3 className="m-0 mb-4 text-[15px] font-medium">Preferences</h3>
+    <Window>
+      <div className="scroll-thin flex-1 min-h-0 overflow-y-auto p-5">
+      <div className="flex items-center gap-3 mb-5">
+        <Button className="h-8 w-8 p-0!" aria-label="Back" onClick={onClose}><Icon name="left" size={16} /></Button>
+        <h3 className="m-0 text-[17px] font-medium">Preferences</h3>
+      </div>
 
+      <div className="grid grid-cols-2 gap-x-6">
       <HotkeyRow label="Toggle End" kind="toggle" value={prefs.toggle_shortcut}
         onChanged={(accel) => setPrefs({ ...prefs, toggle_shortcut: accel })} />
       <HotkeyRow label="Clipboard History" kind="clipboard" value={prefs.clipboard_shortcut}
@@ -235,8 +229,9 @@ export function Preferences() {
       <TranslateRows prefs={prefs} onChanged={(p) => setPrefs({ ...prefs, ...p })} />
 
       <GifRows prefs={prefs} onChanged={(p) => setPrefs({ ...prefs, ...p })} />
+      </div>
 
-      <div className="mt-5 pt-4 border-t border-hair">
+      <div className="mt-5 pt-4">
         <div className="text-[13px] mb-2">
           Accessibility permission:{" "}
           <span className={accessible ? "text-success" : "text-danger"}>
@@ -250,6 +245,8 @@ export function Preferences() {
           )}
         </div>
       </div>
+      </div>
+      <StatusBar left="" hints={[["Back", "esc"]]} />
     </Window>
   );
 }

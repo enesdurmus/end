@@ -82,6 +82,54 @@ pub fn open_path(path: String, app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// Size/dates for the detail pane. Directories (macOS .app bundles) are summed, capped so a
+// huge folder can't stall the pane: past the cap the size is None and the UI shows "—".
+#[derive(serde::Serialize)]
+pub struct PathInfo {
+    size: Option<u64>,
+    is_dir: bool,
+    created: Option<u64>,
+    modified: Option<u64>,
+}
+
+fn dir_size(root: &std::path::Path) -> Option<u64> {
+    const MAX_ENTRIES: usize = 50_000;
+    let (mut total, mut seen, mut stack) = (0u64, 0usize, vec![root.to_path_buf()]);
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).ok()?.flatten() {
+            seen += 1;
+            if seen > MAX_ENTRIES {
+                return None;
+            }
+            let meta = entry.metadata().ok()?; // symlinks are not followed
+            if meta.is_dir() {
+                stack.push(entry.path());
+            } else {
+                total += meta.len();
+            }
+        }
+    }
+    Some(total)
+}
+
+#[tauri::command]
+pub async fn path_info(path: String) -> Option<PathInfo> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let meta = std::fs::metadata(&path).ok()?;
+        let secs = |t: std::io::Result<std::time::SystemTime>| {
+            t.ok()?.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs())
+        };
+        Some(PathInfo {
+            size: if meta.is_dir() { dir_size(std::path::Path::new(&path)) } else { Some(meta.len()) },
+            is_dir: meta.is_dir(),
+            created: secs(meta.created()),
+            modified: secs(meta.modified()),
+        })
+    })
+    .await
+    .ok()?
+}
+
 #[tauri::command]
 pub fn app_icon(path: String) -> Option<String> {
     host().app_icon(&path)

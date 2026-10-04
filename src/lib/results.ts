@@ -28,6 +28,18 @@ export function fileToResult(f: RawFile, actions: RunActions): Result {
   };
 }
 
+export const KIND: Record<Result["type"], string> = {
+  app: "Application", file: "File", clipboard: "Clipboard", snippet: "Snippet",
+  command: "Command", language: "Language", translation: "Translation", gif: "GIF",
+};
+
+// the grey second line of a list row
+export function describe(r: Result): string {
+  if (r.type === "app") return KIND.app;
+  if (r.type === "file") return `File • ${r.subtitle?.split("/").slice(0, -1).join("/") || "/"}`;
+  return r.subtitle || KIND[r.type];
+}
+
 export const basename = (p: string) => p.split("/").pop() || p;
 
 export function formatBytes(n: number): string {

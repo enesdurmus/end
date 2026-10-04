@@ -1,7 +1,7 @@
 import { Dispatch, RefObject, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "../types";
-import { Mode, NavAction } from "../lib/navigation";
+import { Mode, NavAction, ROW_SHORTCUTS } from "../lib/navigation";
 
 type Args = {
   dispatch: Dispatch<NavAction>;
@@ -13,16 +13,35 @@ type Args = {
   detected: string;
   onClearHistory: () => void;
   inputRef: RefObject<HTMLInputElement | null>;
+  rowShortcuts: boolean; // the list on screen shows ⌘N chips
+  overlay: boolean; // a full-panel screen (snippets, preferences) owns the keyboard
   onTab: ((delta: number) => void) | null; // null when no tab bar is showing
 };
 
 export function useKeyboardNav({
-  dispatch, results, selected, mode, query, picking, detected, onClearHistory, inputRef, onTab,
+  dispatch, results, selected, mode, query, picking, detected, onClearHistory, inputRef, rowShortcuts, overlay, onTab,
 }: Args) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // those screens have no result list: Enter/arrows must not run a hidden row
+      if (overlay) {
+        if (e.key === "Escape") dispatch({ type: "goRoot" });
+        return;
+      }
       // any printable key while the input isn't focused -> send it to the search box
       if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) inputRef.current?.focus();
+
+      if (e.metaKey && e.key === "k") {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+        return;
+      }
+      if (rowShortcuts && e.metaKey && /^[1-9]$/.test(e.key) && Number(e.key) <= ROW_SHORTCUTS) {
+        const r = results[Number(e.key) - 1];
+        if (r) { e.preventDefault(); r.run(); }
+        return;
+      }
 
       // translate-only shortcuts; advertised in the status bar
       if (mode === "translate" && e.metaKey) {
@@ -71,5 +90,5 @@ export function useKeyboardNav({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [dispatch, results, selected, mode, query, picking, detected, onClearHistory, inputRef, onTab]);
+  }, [dispatch, results, selected, mode, query, picking, detected, onClearHistory, inputRef, rowShortcuts, overlay, onTab]);
 }

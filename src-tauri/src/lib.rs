@@ -81,6 +81,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_apps,
             commands::app_icon,
+            commands::path_info,
             commands::open_path,
             commands::search_files,
             commands::clipboard_history,

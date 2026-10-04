@@ -1,15 +1,11 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
-import { Preferences } from "./components/Preferences";
-import "@fontsource-variable/dm-sans";
+import "@fontsource-variable/inter";
 import "./index.css";
-
-const Root = getCurrentWindow().label === "preferences" ? Preferences : App;
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <Root />
+    <App />
   </React.StrictMode>,
 );

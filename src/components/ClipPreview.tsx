@@ -20,7 +20,7 @@ export function ClipPreview({ clip }: { clip: Clip }) {
         <img
           src={convertFileSrc(clip.path)}
           alt=""
-          className="flex-1 min-h-0 w-full object-contain rounded-lg bg-white/5"
+          className="flex-1 min-h-0 w-full object-contain rounded-lg bg-[#7d78ff]/10"
         />
         <div className="flex-none text-fg-dim text-xs text-center">
           {clip.width} × {clip.height}

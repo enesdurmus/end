@@ -31,6 +31,12 @@ export function buildCommands(
       run: () => dispatch({ type: "manage" }),
     },
     {
+      id: "cmd:preferences", type: "command", title: "Preferences",
+      subtitle: "Shortcuts, limits, translation and GIF settings",
+      aliases: ["preferences", "settings", "prefs", "ayarlar"],
+      run: () => dispatch({ type: "openSettings" }),
+    },
+    {
       id: "cmd:gif", type: "command", title: "Search GIFs",
       subtitle: "Find a GIF and paste it into the app you were in",
       aliases: ["gif", "gifs", "meme"],

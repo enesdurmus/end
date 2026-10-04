@@ -11,7 +11,7 @@ export function TranslateView({
   error: string;
 }) {
   return (
-    <div className="scroll-thin flex-1 min-h-0 px-[18px] py-4 overflow-y-auto">
+    <div className="card scroll-thin flex-1 min-h-0 mx-4 mb-3 p-5 overflow-y-auto">
       {error ? (
         <div className="text-danger text-[13px]">{error}</div>
       ) : entry ? (

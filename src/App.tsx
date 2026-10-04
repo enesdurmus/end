@@ -6,9 +6,12 @@ import { ClipboardView } from "./components/ClipboardView";
 import { TranslateView } from "./components/TranslateView";
 import { GifList } from "./components/GifList";
 import { Tabs, Tab, TABS } from "./components/Tabs";
+import { Detail } from "./components/Detail";
 import { StatusBar } from "./components/StatusBar";
+import { Preferences } from "./components/Preferences";
 import { SnippetManager } from "./components/SnippetManager";
 import { Window } from "./components/ui/Window";
+import { Split } from "./components/ui/Split";
 import { buildCommands } from "./commands";
 import { runActions } from "./lib/actions";
 import { buildResults, langToResult, translationToResult, gifToResult } from "./lib/results";
@@ -39,10 +42,10 @@ const PLACEHOLDER = {
 export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [nav, dispatch] = useReducer(navReducer, initialNav);
-  const { mode, query, selected, managing, picking, source, target } = nav;
+  const { mode, query, selected, screen, picking, source, target } = nav;
 
   const apps = useApps(runActions);
-  const snips = useSnippets(runActions, managing);
+  const snips = useSnippets(runActions, screen === "snippets");
   const files = useFileSearch(runActions, mode, query);
   const { clips, load: loadClips } = useClipboard(runActions);
   const { history, load: loadHistory, clear: clearHistory } = useTranslateHistory(runActions);
@@ -159,17 +162,21 @@ export default function App() {
   };
 
   useLauncherEvents(dispatch, loadClips);
+  const typing = mode === "translate" && !!query.trim();
   useKeyboardNav({
     dispatch, results, selected, mode, query, picking,
     detected: entry?.from ?? "en",
     onClearHistory: clearHistory,
     inputRef,
+    rowShortcuts: picking || !(mode === "gif" || typing),
+    overlay: screen !== "launcher",
     onTab: showTabs ? stepTab : null,
   });
 
-  if (managing) return <SnippetManager onClose={() => dispatch({ type: "closeManage" })} />;
+  const close = () => dispatch({ type: "goRoot" });
+  if (screen === "snippets") return <SnippetManager />;
+  if (screen === "settings") return <Preferences onClose={close} />;
 
-  const typing = mode === "translate" && !!query.trim();
   // nav's `source` stays "auto" so the next request keeps auto-detecting;
   // the status bar shows what the backend actually detected
   const displaySource = typing && entry ? entry.from : source;
@@ -196,7 +203,7 @@ export default function App() {
         : { left: `${results.length} results`, hints: [["Navigate", "↑↓"], ["Tabs", "←→"], ["Open", "↵"], ["Close", "esc"]] };
 
   return (
-    <Window variant="floating">
+    <Window>
       <SearchBar
         inputRef={inputRef}
         value={query}
@@ -211,17 +218,24 @@ export default function App() {
         placeholder={picking ? "Search languages..." : PLACEHOLDER[mode]}
         onChange={(q) => dispatch({ type: "setQuery", query: q })}
       />
-      {showTabs && <Tabs active={activeTab} onPick={pickTab} />}
+      {showTabs && <Tabs active={activeTab} onPick={pickTab} onSettings={() => dispatch({ type: "openSettings" })} />}
       {picking ? (
-        <ResultList results={results} selected={selected} onSelect={onSelect} />
+        <div className="flex flex-col flex-1 min-h-0 px-4 pb-3">
+          <ResultList results={results} selected={selected} onSelect={onSelect} />
+        </div>
       ) : typing ? (
         <TranslateView entry={entry} loading={loading} error={error} />
       ) : mode === "clipboard" || mode === "translate" ? (
         <ClipboardView results={results} selected={selected} onSelect={onSelect} />
       ) : mode === "gif" ? (
-        <GifList results={results} selected={selected} onSelect={onSelect} />
+        <div className="flex flex-col flex-1 min-h-0 px-4 pb-3">
+          <GifList results={results} selected={selected} onSelect={onSelect} />
+        </div>
       ) : (
-        <ResultList results={results} selected={selected} onSelect={onSelect} />
+        <Split
+          left={<ResultList results={results} selected={selected} onSelect={onSelect} />}
+          right={<Detail result={results[selected]} />}
+        />
       )}
       <StatusBar left={status.left} hints={status.hints} />
     </Window>
