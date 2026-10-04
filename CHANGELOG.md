@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/enesdurmus/end/compare/v0.2.1...v0.3.0) (2026-10-04)
+
+
+### Features
+
+* **translate:** show every rendering and pick source/target language ([93764e7](https://github.com/enesdurmus/end/commit/93764e7f0028acbb095265a6eccd472a31955d23))
+* **ui:** reference redesign, detail pane and in-panel preferences ([8b55999](https://github.com/enesdurmus/end/commit/8b559992f59d3885074b838bbecd8eeac093fb77))
+* **ui:** reference redesign, detail pane and in-panel preferences ([f0a466f](https://github.com/enesdurmus/end/commit/f0a466fd4bd11c6b609deffad943899ec2c0fd89))
+
+
+### Styles
+
+* **ui:** neutral grey panel surfaces and drop the ⌘K chip ([cdd0334](https://github.com/enesdurmus/end/commit/cdd033470556eab51373350480525a7ae273188b))
+
 ## [0.2.1](https://github.com/enesdurmus/end/compare/v0.2.0...v0.2.1) (2026-10-04)
 
 
