@@ -1,7 +1,5 @@
 # Contributing to End
 
-Thanks for taking the time to contribute!
-
 ## Development setup
 
 ```sh
@@ -28,6 +26,12 @@ Both suites should pass before opening a PR.
 4. Run `npm run build` (typecheck) and both test suites locally.
 5. Open a PR describing what changed and why.
 
-## Reporting bugs / requesting features
+## Releasing
 
-Use the issue templates on the [Issues](https://github.com/enesdurmus/End/issues) page.
+Releases are cut by release-please: merge the release PR, and CI builds the
+artifacts and opens a draft GitHub release. Publish the draft to make it visible
+to users and the in-app updater.
+
+## Bugs and feature requests
+
+Use the [issue templates](https://github.com/enesdurmus/End/issues).
