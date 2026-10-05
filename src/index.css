@@ -20,7 +20,7 @@ html, body, #root { margin: 0; height: 100%; background: transparent; }
 /* every surface is just a gradient plus a shadow */
 @utility window-glass {
   background: linear-gradient(160deg, #232734 0%, #0f1219 75%);
-  box-shadow: 0 0 36px rgba(150, 160, 200, 0.2), 0 30px 80px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 20px rgba(140, 120, 230, 0.25), 0 10px 24px rgba(12, 6, 30, 0.5);
 }
 @utility surface-field {
   background: linear-gradient(180deg, rgba(170, 180, 215, 0.14), rgba(170, 180, 215, 0.06));
