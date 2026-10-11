@@ -14,11 +14,6 @@ fn default_image_limit() -> usize {
     DEFAULT_IMAGE_LIMIT
 }
 
-pub const DEFAULT_SCREENSHOT_LIMIT: usize = 100;
-fn default_screenshot_limit() -> usize {
-    DEFAULT_SCREENSHOT_LIMIT
-}
-
 fn default_screenshot_shortcut() -> String {
     "Alt+Shift+KeyS".into()
 }
@@ -47,10 +42,6 @@ pub struct Preferences {
     /// Empty falls back to `<app_config_dir>/gifs`.
     #[serde(default)]
     pub gif_dir: String,
-    #[serde(default)]
-    pub screenshot_dir: String,
-    #[serde(default = "default_screenshot_limit")]
-    pub screenshot_limit: usize,
 }
 
 impl Default for Preferences {
@@ -65,8 +56,6 @@ impl Default for Preferences {
             translate_provider: Provider::default(),
             klipy_api_key: String::new(),
             gif_dir: String::new(),
-            screenshot_dir: String::new(),
-            screenshot_limit: DEFAULT_SCREENSHOT_LIMIT,
         }
     }
 }
@@ -119,14 +108,6 @@ mod tests {
         let json = r#"{"toggle_shortcut":"Super+Space","clipboard_shortcut":"Super+Shift+KeyV"}"#;
         let p: Preferences = serde_json::from_str(json).unwrap();
         assert_eq!(p.screenshot_shortcut, "Alt+Shift+KeyS");
-    }
-
-    #[test]
-    fn old_preferences_file_without_screenshot_fields_gets_defaults() {
-        let json = r#"{"toggle_shortcut":"Super+Space","clipboard_shortcut":"Super+Shift+KeyV"}"#;
-        let p: Preferences = serde_json::from_str(json).unwrap();
-        assert_eq!(p.screenshot_dir, "");
-        assert_eq!(p.screenshot_limit, 100);
     }
 
     #[test]

@@ -23,9 +23,8 @@ pub trait Platform: Send + Sync {
     fn clipboard_change_count(&self) -> Option<u64>;
     fn accessibility_granted(&self) -> bool;
     fn open_accessibility_settings(&self) -> Result<(), String>;
-    /// Puts a user-picked screen region on the clipboard and, on macOS, saves it into
-    /// `save_dir`. Blocks until they finish or cancel (cancel is Ok).
-    fn screenshot_region(&self, save_dir: Option<&std::path::Path>) -> Result<(), String>;
+    /// Puts a user-picked screen region on the clipboard. Blocks until they finish or cancel (cancel is Ok).
+    fn screenshot_region(&self) -> Result<(), String>;
 }
 
 #[cfg(target_os = "macos")]
