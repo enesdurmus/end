@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/enesdurmus/end/compare/v0.3.1...v0.4.0) (2026-10-11)
+
+
+### Features
+
+* **screenshot:** region screenshot shortcut that copies to the clipboard ([3050284](https://github.com/enesdurmus/end/commit/3050284e2ac6d8401a39b12712c4affce4e05d99))
+* **screenshot:** region screenshot shortcut that copies to the clipboard ([4f5fe3b](https://github.com/enesdurmus/end/commit/4f5fe3bf6cede75be3adeb9ec4b342048bcb1957))
+
 ## [0.3.1](https://github.com/enesdurmus/end/compare/v0.3.0...v0.3.1) (2026-10-05)
 
 
