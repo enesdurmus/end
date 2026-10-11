@@ -14,6 +14,15 @@ fn default_image_limit() -> usize {
     DEFAULT_IMAGE_LIMIT
 }
 
+pub const DEFAULT_SCREENSHOT_LIMIT: usize = 100;
+fn default_screenshot_limit() -> usize {
+    DEFAULT_SCREENSHOT_LIMIT
+}
+
+fn default_screenshot_shortcut() -> String {
+    "Alt+Shift+KeyS".into()
+}
+
 fn default_translate_target() -> String {
     "en".into()
 }
@@ -22,6 +31,8 @@ fn default_translate_target() -> String {
 pub struct Preferences {
     pub toggle_shortcut: String,
     pub clipboard_shortcut: String,
+    #[serde(default = "default_screenshot_shortcut")]
+    pub screenshot_shortcut: String,
     #[serde(default = "default_history_limit")]
     pub history_limit: usize,
     #[serde(default = "default_image_limit")]
@@ -36,6 +47,12 @@ pub struct Preferences {
     /// Empty falls back to `<app_config_dir>/gifs`.
     #[serde(default)]
     pub gif_dir: String,
+    /// Empty falls back to `~/Pictures/End`.
+    #[serde(default)]
+    pub screenshot_dir: String,
+    /// Oldest saved screenshots are deleted past this; 0 keeps none.
+    #[serde(default = "default_screenshot_limit")]
+    pub screenshot_limit: usize,
 }
 
 impl Default for Preferences {
@@ -43,12 +60,15 @@ impl Default for Preferences {
         Preferences {
             toggle_shortcut: "Super+Space".into(),
             clipboard_shortcut: "Super+Shift+KeyV".into(),
+            screenshot_shortcut: default_screenshot_shortcut(),
             history_limit: DEFAULT_HISTORY_LIMIT,
             image_limit: DEFAULT_IMAGE_LIMIT,
             translate_target: default_translate_target(),
             translate_provider: Provider::default(),
             klipy_api_key: String::new(),
             gif_dir: String::new(),
+            screenshot_dir: String::new(),
+            screenshot_limit: DEFAULT_SCREENSHOT_LIMIT,
         }
     }
 }
@@ -94,6 +114,21 @@ mod tests {
         let json = r#"{"toggle_shortcut":"Super+Space","clipboard_shortcut":"Super+Shift+KeyV","history_limit":200}"#;
         let p: Preferences = serde_json::from_str(json).unwrap();
         assert_eq!(p.image_limit, DEFAULT_IMAGE_LIMIT);
+    }
+
+    #[test]
+    fn old_preferences_file_without_a_screenshot_shortcut_gets_the_default() {
+        let json = r#"{"toggle_shortcut":"Super+Space","clipboard_shortcut":"Super+Shift+KeyV"}"#;
+        let p: Preferences = serde_json::from_str(json).unwrap();
+        assert_eq!(p.screenshot_shortcut, "Alt+Shift+KeyS");
+    }
+
+    #[test]
+    fn old_preferences_file_without_screenshot_fields_gets_defaults() {
+        let json = r#"{"toggle_shortcut":"Super+Space","clipboard_shortcut":"Super+Shift+KeyV"}"#;
+        let p: Preferences = serde_json::from_str(json).unwrap();
+        assert_eq!(p.screenshot_dir, "");
+        assert_eq!(p.screenshot_limit, 100);
     }
 
     #[test]
