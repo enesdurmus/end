@@ -68,53 +68,14 @@ pub fn on_press<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, event: Shor
     dispatch(app, id);
 }
 
-#[cfg(target_os = "macos")]
-fn screenshot_dir<R: Runtime>(app: &AppHandle<R>, configured: &str) -> std::path::PathBuf {
-    if !configured.trim().is_empty() {
-        return configured.into();
-    }
-    match app.path().picture_dir() {
-        Ok(pictures) => pictures.join("End"),
-        Err(_) => app.path().app_config_dir().unwrap().join("screenshots"),
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn prune_screenshots(dir: &std::path::Path, limit: usize) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
-    // names embed a millisecond timestamp, so sorting by name is sorting by age
-    let mut shots: Vec<_> = entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("screenshot-") && n.ends_with(".png"))
-        })
-        .collect();
-    shots.sort();
-    let excess = shots.len().saturating_sub(limit);
-    for p in &shots[..excess] {
-        let _ = std::fs::remove_file(p);
-    }
-}
-
 /// Shared by the X11 grab handler above and the Wayland portal listener.
 pub(crate) fn dispatch<R: Runtime>(app: &AppHandle<R>, id: &str) {
     if id == "screenshot" {
         // blocks until the user has picked a region, so keep it off the caller's thread
-        #[cfg(target_os = "macos")]
-        let app = app.clone();
-        std::thread::spawn(move || {
-            #[cfg(target_os = "macos")]
-            let prefs = crate::preferences::load(&app.path().app_config_dir().unwrap());
-            #[cfg(target_os = "macos")]
-            let save = Some(screenshot_dir(&app, &prefs.screenshot_dir));
-            #[cfg(not(target_os = "macos"))]
-            let save: Option<std::path::PathBuf> = None;
-            if let Err(e) = crate::platform::host().screenshot_region(save.as_deref()) {
+        std::thread::spawn(|| {
+            if let Err(e) = crate::platform::host().screenshot_region() {
                 eprintln!("screenshot: {e}");
             }
-            #[cfg(target_os = "macos")]
-            prune_screenshots(save.as_deref().unwrap(), prefs.screenshot_limit);
         });
         return;
     }

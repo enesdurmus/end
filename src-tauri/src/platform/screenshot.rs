@@ -1,14 +1,5 @@
 use std::path::Path;
 
-#[cfg(target_os = "macos")]
-pub(super) fn new_path(dir: &Path) -> Result<std::path::PathBuf, String> {
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_millis());
-    Ok(dir.join(format!("screenshot-{ms}.png")))
-}
-
 pub(super) fn copy_png(path: &Path) -> Result<(), String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut reader = png::Decoder::new(std::io::BufReader::new(file)).read_info().map_err(|e| e.to_string())?;
