@@ -1,4 +1,4 @@
-use super::{AppEntry, Platform};
+use super::{screenshot, AppEntry, Platform};
 use std::process::Command;
 
 mod apps;
@@ -68,6 +68,21 @@ impl Platform for MacOs {
             .spawn()
             .map(|_| ())
             .map_err(|e| e.to_string())
+    }
+
+    fn screenshot_region(&self, save_dir: Option<&std::path::Path>) -> Result<(), String> {
+        let Some(dir) = save_dir else {
+            Command::new("screencapture").args(["-i", "-c"]).status().map_err(|e| e.to_string())?;
+            return Ok(());
+        };
+        // with -c a filename is ignored, so capture to the file and copy it ourselves
+        let path = screenshot::new_path(dir)?;
+        Command::new("screencapture").args(["-i", "-t", "png"]).arg(&path).status().map_err(|e| e.to_string())?;
+        // Esc writes no file
+        if !path.exists() {
+            return Ok(());
+        }
+        screenshot::copy_png(&path)
     }
 }
 

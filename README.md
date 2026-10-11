@@ -18,6 +18,7 @@ nothing leaves your machine.
 - Snippets
 - Translate and GIF search (these call their third-party APIs directly from
   your machine, the only outbound traffic End makes)
+- Region screenshot (Alt+Shift+S by default), copied to the clipboard; on macOS it is also saved to `~/Pictures/End` (folder and limit are set in Preferences, last 100 kept)
 - Global hotkey
 
 Preferences, history and snippets are stored locally on disk.

@@ -7,6 +7,7 @@ mod clipboard;
 mod desktop;
 mod icons;
 mod input;
+mod screenshot;
 mod search;
 pub(crate) mod shortcuts;
 
@@ -74,6 +75,10 @@ impl Platform for Linux {
             "no keystroke tool found. Install {} to enable pasting.",
             if wayland() { "wtype or ydotool" } else { "xdotool" }
         ))
+    }
+
+    fn screenshot_region(&self, _save_dir: Option<&std::path::Path>) -> Result<(), String> {
+        screenshot::region()
     }
 }
 
