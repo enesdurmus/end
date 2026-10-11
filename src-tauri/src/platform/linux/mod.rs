@@ -77,7 +77,7 @@ impl Platform for Linux {
         ))
     }
 
-    fn screenshot_region(&self, _save_dir: Option<&std::path::Path>) -> Result<(), String> {
+    fn screenshot_region(&self) -> Result<(), String> {
         screenshot::region()
     }
 }

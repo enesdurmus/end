@@ -110,7 +110,6 @@ pub fn run() {
             commands::paste_gif,
             commands::favorite_gif,
             commands::open_gif_dir,
-            commands::set_screenshot_limit,
             commands::set_gif_prefs
         ])
         .run(tauri::generate_context!())
