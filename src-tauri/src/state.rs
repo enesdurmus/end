@@ -13,6 +13,7 @@ pub struct ClipState {
 pub struct ShortcutsState {
     pub toggle: Mutex<Shortcut>,
     pub clipboard: Mutex<Shortcut>,
+    pub screenshot: Mutex<Shortcut>,
     pub dir: PathBuf,
 }
 

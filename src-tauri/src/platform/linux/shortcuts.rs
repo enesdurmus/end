@@ -64,12 +64,15 @@ async fn run<R: Runtime>(
     // an unchanged shortcut keeps its grant, a changed one is bound afresh.
     let toggle = preferred_trigger(&prefs.toggle_shortcut);
     let clipboard = preferred_trigger(&prefs.clipboard_shortcut);
+    let screenshot = preferred_trigger(&prefs.screenshot_shortcut);
     let id = |name: &str, t: &Option<String>| format!("{name}@{}", t.as_deref().unwrap_or(""));
     let bindings = [
         NewShortcut::new(id("toggle", &toggle), "Toggle launcher")
             .preferred_trigger(toggle.as_deref()),
         NewShortcut::new(id("clipboard", &clipboard), "Open clipboard history")
             .preferred_trigger(clipboard.as_deref()),
+        NewShortcut::new(id("screenshot", &screenshot), "Screenshot of a screen region")
+            .preferred_trigger(screenshot.as_deref()),
     ];
     // A consent dialog the user never saw never answers, and this call waits
     // for it - give up rather than hang with nothing bound and nothing logged.

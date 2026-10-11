@@ -164,6 +164,7 @@ pub fn set_shortcut(app: tauri::AppHandle, kind: String, accelerator: String) ->
     let slot = match kind.as_str() {
         "toggle" => &state.toggle,
         "clipboard" => &state.clipboard,
+        "screenshot" => &state.screenshot,
         _ => return Err(format!("unknown shortcut kind: {kind}")),
     };
     let mut current = slot.lock().unwrap();
@@ -185,6 +186,8 @@ pub fn set_shortcut(app: tauri::AppHandle, kind: String, accelerator: String) ->
     let mut prefs = preferences::load(&state.dir);
     if kind == "toggle" {
         prefs.toggle_shortcut = accelerator;
+    } else if kind == "screenshot" {
+        prefs.screenshot_shortcut = accelerator;
     } else {
         prefs.clipboard_shortcut = accelerator;
     }
@@ -203,7 +206,7 @@ pub fn set_shortcut(app: tauri::AppHandle, kind: String, accelerator: String) ->
 #[tauri::command]
 pub fn pause_shortcuts(app: tauri::AppHandle) {
     let state = app.state::<ShortcutsState>();
-    for slot in [&state.toggle, &state.clipboard] {
+    for slot in [&state.toggle, &state.clipboard, &state.screenshot] {
         let _ = app.global_shortcut().unregister(*slot.lock().unwrap());
     }
     #[cfg(target_os = "linux")]
@@ -217,8 +220,12 @@ pub fn pause_shortcuts(app: tauri::AppHandle) {
 #[tauri::command]
 pub fn resume_shortcuts(app: tauri::AppHandle) {
     let state = app.state::<ShortcutsState>();
-    let (toggle, clipboard) = (state.toggle.lock().unwrap(), state.clipboard.lock().unwrap());
-    for s in [*toggle, *clipboard] {
+    let (toggle, clipboard, screenshot) = (
+        state.toggle.lock().unwrap(),
+        state.clipboard.lock().unwrap(),
+        state.screenshot.lock().unwrap(),
+    );
+    for s in [*toggle, *clipboard, *screenshot] {
         let _ = app.global_shortcut().unregister(s);
         if let Err(e) = app.global_shortcut().register(s) {
             eprintln!("resume shortcut: {e}");
@@ -304,6 +311,7 @@ pub fn set_translate_prefs(
 pub fn set_gif_prefs(
     klipy_api_key: Option<String>,
     gif_dir: Option<String>,
+    screenshot_dir: Option<String>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     let dir = app.path().app_config_dir().unwrap();
@@ -320,6 +328,20 @@ pub fn set_gif_prefs(
             .allow_directory(&resolved, false)
             .map_err(|e| e.to_string())?;
     }
+    if let Some(d) = screenshot_dir {
+        if !d.is_empty() {
+            std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+        }
+        prefs.screenshot_dir = d;
+    }
+    preferences::save(&dir, &prefs)
+}
+
+#[tauri::command]
+pub fn set_screenshot_limit(limit: usize, app: tauri::AppHandle) -> Result<(), String> {
+    let dir = app.path().app_config_dir().unwrap();
+    let mut prefs = preferences::load(&dir);
+    prefs.screenshot_limit = limit.clamp(0, 1_000);
     preferences::save(&dir, &prefs)
 }
 

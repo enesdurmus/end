@@ -135,7 +135,7 @@ fn file_uri(path: &str) -> String {
     s
 }
 
-fn percent_decode(s: &str) -> String {
+pub(super) fn percent_decode(s: &str) -> String {
     let b = s.trim().as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
