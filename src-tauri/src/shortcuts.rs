@@ -69,7 +69,6 @@ pub fn on_press<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, event: Shor
 }
 
 #[cfg(target_os = "macos")]
-/// Empty `configured` falls back to `~/Pictures/End` (the app config dir if there is no Pictures folder).
 fn screenshot_dir<R: Runtime>(app: &AppHandle<R>, configured: &str) -> std::path::PathBuf {
     if !configured.trim().is_empty() {
         return configured.into();
@@ -81,7 +80,6 @@ fn screenshot_dir<R: Runtime>(app: &AppHandle<R>, configured: &str) -> std::path
 }
 
 #[cfg(target_os = "macos")]
-/// Deletes the oldest `screenshot-*.png` files beyond `limit`; other files are never touched.
 fn prune_screenshots(dir: &std::path::Path, limit: usize) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     // names embed a millisecond timestamp, so sorting by name is sorting by age
@@ -106,7 +104,6 @@ pub(crate) fn dispatch<R: Runtime>(app: &AppHandle<R>, id: &str) {
         #[cfg(target_os = "macos")]
         let app = app.clone();
         std::thread::spawn(move || {
-            // Linux's portal saves the file itself, so these settings only apply on macOS
             #[cfg(target_os = "macos")]
             let prefs = crate::preferences::load(&app.path().app_config_dir().unwrap());
             #[cfg(target_os = "macos")]

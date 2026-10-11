@@ -47,10 +47,8 @@ pub struct Preferences {
     /// Empty falls back to `<app_config_dir>/gifs`.
     #[serde(default)]
     pub gif_dir: String,
-    /// Empty falls back to `~/Pictures/End`.
     #[serde(default)]
     pub screenshot_dir: String,
-    /// Oldest saved screenshots are deleted past this; 0 keeps none.
     #[serde(default = "default_screenshot_limit")]
     pub screenshot_limit: usize,
 }
