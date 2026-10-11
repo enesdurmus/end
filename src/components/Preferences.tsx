@@ -12,14 +12,17 @@ import { LANGUAGES } from "../lib/languages";
 type Prefs = {
   toggle_shortcut: string;
   clipboard_shortcut: string;
+  screenshot_shortcut: string;
   history_limit: number;
   image_limit: number;
   translate_target: string;
   translate_provider: string;
   klipy_api_key: string;
   gif_dir: string;
+  screenshot_dir: string;
+  screenshot_limit: number;
 };
-type Kind = "toggle" | "clipboard";
+type Kind = "toggle" | "clipboard" | "screenshot";
 
 const MODIFIER_CODES = new Set(["MetaLeft", "MetaRight", "OSLeft", "OSRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "ShiftLeft", "ShiftRight"]);
 
@@ -164,15 +167,20 @@ function TranslateRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Part
   );
 }
 
+// Linux hands the file to the desktop portal, which saves it itself; only macOS uses these settings.
+const MAC = navigator.userAgent.includes("Mac");
+
 function GifRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Prefs>) => void }) {
   const [key, setKey] = useState(prefs.klipy_api_key);
   const [dir, setDir] = useState(prefs.gif_dir);
+  const [shotDir, setShotDir] = useState(prefs.screenshot_dir);
   const [error, setError] = useState("");
 
   const commit = (next: Partial<Prefs>) => {
     invoke("set_gif_prefs", {
       klipyApiKey: next.klipy_api_key ?? null,
       gifDir: next.gif_dir ?? null,
+      screenshotDir: next.screenshot_dir ?? null,
     })
       .then(() => { setError(""); onChanged(next); })
       .catch((err) => setError(String(err)));
@@ -186,6 +194,11 @@ function GifRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Pr
       <Field label="GIF Folder" hint="Boş bırakırsan varsayılan klasör kullanılır." error={error}>
         <Input value={dir} onChange={(e) => setDir(e.target.value)} onBlur={() => commit({ gif_dir: dir })} />
       </Field>
+      {MAC && (
+        <Field label="Screenshot Folder" hint="Boş bırakırsan ~/Pictures/End kullanılır." error={error}>
+          <Input value={shotDir} onChange={(e) => setShotDir(e.target.value)} onBlur={() => commit({ screenshot_dir: shotDir })} />
+        </Field>
+      )}
     </>
   );
 }
@@ -216,6 +229,8 @@ export function Preferences({ onClose }: { onClose: () => void }) {
         onChanged={(accel) => setPrefs({ ...prefs, toggle_shortcut: accel })} />
       <HotkeyRow label="Clipboard History" kind="clipboard" value={prefs.clipboard_shortcut}
         onChanged={(accel) => setPrefs({ ...prefs, clipboard_shortcut: accel })} />
+      <HotkeyRow label="Screenshot" kind="screenshot" value={prefs.screenshot_shortcut}
+        onChanged={(accel) => setPrefs({ ...prefs, screenshot_shortcut: accel })} />
 
       <LimitRow label="Clipboard History Limit" command="set_history_limit" min={1} max={10000}
         value={prefs.history_limit}
@@ -229,6 +244,13 @@ export function Preferences({ onClose }: { onClose: () => void }) {
       <TranslateRows prefs={prefs} onChanged={(p) => setPrefs({ ...prefs, ...p })} />
 
       <GifRows prefs={prefs} onChanged={(p) => setPrefs({ ...prefs, ...p })} />
+
+      {MAC && (
+        <LimitRow label="Screenshot Limit" command="set_screenshot_limit" min={0} max={1000}
+          hint="Oldest saved screenshots are deleted past this; 0 keeps none."
+          value={prefs.screenshot_limit}
+          onChanged={(n) => setPrefs({ ...prefs, screenshot_limit: n })} />
+      )}
       </div>
 
       <div className="mt-5 pt-4">

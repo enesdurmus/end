@@ -38,5 +38,10 @@ Preferences → "Accessibility permission" shows whether a paste tool was found.
   lack it). The compositor owns the final key, so rebind it in your desktop's
   settings; changing it in Preferences opens a new consent dialog. Without the
   portal, the shortcut only fires while an XWayland window has focus.
+- **Screenshot:** uses the `Screenshot` portal, so GNOME and KDE show their own
+  region picker and need no helper tool. The result lands on the clipboard (and
+  in clipboard history). The portal saves the file itself (GNOME:
+  `~/Pictures/Screenshots`) and End leaves it there, so the screenshot folder and
+  limit settings don't apply on Linux.
 - **Terminals:** End sends Ctrl+V, which most terminals read as a literal `^V`.
   Bind Ctrl+V to paste in yours.
