@@ -1,9 +1,5 @@
-//! Pieces shared by the per-OS region screenshot implementations.
-
 use std::path::Path;
 
-/// Creates `dir` and returns a fresh `screenshot-<ms>.png` path inside it. The
-/// prefix lets pruning (see `shortcuts::prune_screenshots`) leave other files alone.
 #[cfg(target_os = "macos")]
 pub(super) fn new_path(dir: &Path) -> Result<std::path::PathBuf, String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;

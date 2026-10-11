@@ -167,7 +167,6 @@ function TranslateRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Part
   );
 }
 
-// Linux hands the file to the desktop portal, which saves it itself; only macOS uses these settings.
 const MAC = navigator.userAgent.includes("Mac");
 
 function GifRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Prefs>) => void }) {
