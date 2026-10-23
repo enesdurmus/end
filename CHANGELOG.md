@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1](https://github.com/enesdurmus/end/compare/v0.4.0...v0.4.1) (2026-10-23)
+
+
+### Dependencies
+
+* bump the tauri group across 1 directory with 5 updates ([#53](https://github.com/enesdurmus/end/issues/53)) ([2563323](https://github.com/enesdurmus/end/commit/2563323f7d5096775dcac55d294f6a4e4b65cc29))
+* bump the tauri group across 1 directory with 6 updates ([#54](https://github.com/enesdurmus/end/issues/54)) ([b240deb](https://github.com/enesdurmus/end/commit/b240deba87364c87dc5a4109bf5cd99f6838a66c))
+
 ## [0.4.0](https://github.com/enesdurmus/end/compare/v0.3.1...v0.4.0) (2026-10-11)
 
 
