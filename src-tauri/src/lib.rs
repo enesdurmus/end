@@ -5,6 +5,7 @@ mod gifs;
 mod platform;
 mod preferences;
 mod shortcuts;
+mod snap;
 mod snippets;
 mod state;
 mod translate;
@@ -94,6 +95,8 @@ pub fn run() {
             commands::save_snippets,
             commands::get_preferences,
             commands::set_shortcut,
+            commands::set_window_management,
+            commands::window_management_note,
             commands::pause_shortcuts,
             commands::resume_shortcuts,
             commands::set_history_limit,

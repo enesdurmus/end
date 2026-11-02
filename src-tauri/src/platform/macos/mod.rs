@@ -6,6 +6,7 @@ mod clipboard;
 mod icons;
 mod input;
 mod search;
+mod snap;
 
 pub struct MacOs;
 
@@ -74,6 +75,14 @@ impl Platform for MacOs {
         // -i: interactive region select, -c: to the clipboard; Esc cancels with exit 0
         Command::new("screencapture").args(["-i", "-c"]).status().map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    fn place_window(&self, action: crate::snap::Action) -> Result<(), String> {
+        snap::place(action)
+    }
+
+    fn setup_window_management(&self) -> Option<String> {
+        (!self.accessibility_granted()).then(|| "Grant the Accessibility permission below, window snapping needs it.".into())
     }
 }
 

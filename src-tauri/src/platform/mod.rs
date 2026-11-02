@@ -25,6 +25,10 @@ pub trait Platform: Send + Sync {
     fn open_accessibility_settings(&self) -> Result<(), String>;
     /// Puts a user-picked screen region on the clipboard. Blocks until they finish or cancel (cancel is Ok).
     fn screenshot_region(&self) -> Result<(), String>;
+    /// Moves the focused window as `snap::target` says. Err names what is missing.
+    fn place_window(&self, action: crate::snap::Action) -> Result<(), String>;
+    /// Installs whatever `place_window` needs (idempotent). Some(note) is what the user still has to do.
+    fn setup_window_management(&self) -> Option<String>;
 }
 
 #[cfg(target_os = "macos")]

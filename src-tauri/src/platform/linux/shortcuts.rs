@@ -66,7 +66,7 @@ async fn run<R: Runtime>(
     let clipboard = preferred_trigger(&prefs.clipboard_shortcut);
     let screenshot = preferred_trigger(&prefs.screenshot_shortcut);
     let id = |name: &str, t: &Option<String>| format!("{name}@{}", t.as_deref().unwrap_or(""));
-    let bindings = [
+    let mut bindings = vec![
         NewShortcut::new(id("toggle", &toggle), "Toggle launcher")
             .preferred_trigger(toggle.as_deref()),
         NewShortcut::new(id("clipboard", &clipboard), "Open clipboard history")
@@ -74,6 +74,12 @@ async fn run<R: Runtime>(
         NewShortcut::new(id("screenshot", &screenshot), "Screenshot of a screen region")
             .preferred_trigger(screenshot.as_deref()),
     ];
+    if prefs.window_management {
+        for b in crate::snap::BINDINGS {
+            let t = preferred_trigger(b.accelerator);
+            bindings.push(NewShortcut::new(id(b.id, &t), b.label).preferred_trigger(t.as_deref()));
+        }
+    }
     // A consent dialog the user never saw never answers, and this call waits
     // for it - give up rather than hang with nothing bound and nothing logged.
     // Meanwhile a newer spawn() cancels this one, which also dismisses its dialog.
@@ -180,6 +186,10 @@ fn preferred_trigger(shortcut: &str) -> Option<String> {
                 "Escape" => "Escape".to_string(),
                 "Tab" => "Tab".to_string(),
                 "Backspace" => "BackSpace".to_string(),
+                "ArrowLeft" => "Left".to_string(),
+                "ArrowRight" => "Right".to_string(),
+                "ArrowUp" => "Up".to_string(),
+                "ArrowDown" => "Down".to_string(),
                 _ if part.starts_with("Key") && part.len() == 4 => part[3..].to_lowercase(),
                 _ if part.starts_with("Digit") && part.len() == 6 => part[5..].to_string(),
                 _ if part.starts_with('F') && part[1..].parse::<u8>().is_ok() => part.to_string(),
@@ -224,6 +234,14 @@ mod tests {
     fn maps_named_keys_to_their_keysym_names() {
         assert_eq!(preferred_trigger("Shift+Tab"), Some("SHIFT+Tab".into()));
         assert_eq!(preferred_trigger("Control+Enter"), Some("CTRL+Return".into()));
+    }
+
+    #[test]
+    fn maps_arrows_and_every_snap_binding() {
+        assert_eq!(preferred_trigger("Control+Alt+ArrowLeft"), Some("CTRL+ALT+Left".into()));
+        for b in crate::snap::BINDINGS {
+            assert!(preferred_trigger(b.accelerator).is_some(), "{}", b.accelerator);
+        }
     }
 
     #[test]

@@ -28,6 +28,9 @@ pub struct Preferences {
     pub clipboard_shortcut: String,
     #[serde(default = "default_screenshot_shortcut")]
     pub screenshot_shortcut: String,
+    /// Window snapping shortcuts (see `snap`).
+    #[serde(default)]
+    pub window_management: bool,
     #[serde(default = "default_history_limit")]
     pub history_limit: usize,
     #[serde(default = "default_image_limit")]
@@ -50,6 +53,7 @@ impl Default for Preferences {
             toggle_shortcut: "Super+Space".into(),
             clipboard_shortcut: "Super+Shift+KeyV".into(),
             screenshot_shortcut: default_screenshot_shortcut(),
+            window_management: false,
             history_limit: DEFAULT_HISTORY_LIMIT,
             image_limit: DEFAULT_IMAGE_LIMIT,
             translate_target: default_translate_target(),
@@ -108,6 +112,13 @@ mod tests {
         let json = r#"{"toggle_shortcut":"Super+Space","clipboard_shortcut":"Super+Shift+KeyV"}"#;
         let p: Preferences = serde_json::from_str(json).unwrap();
         assert_eq!(p.screenshot_shortcut, "Alt+Shift+KeyS");
+    }
+
+    #[test]
+    fn old_preferences_file_has_window_management_off() {
+        let json = r#"{"toggle_shortcut":"Super+Space","clipboard_shortcut":"Super+Shift+KeyV"}"#;
+        let p: Preferences = serde_json::from_str(json).unwrap();
+        assert!(!p.window_management);
     }
 
     #[test]

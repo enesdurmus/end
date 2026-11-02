@@ -201,6 +201,33 @@ pub fn set_shortcut(app: tauri::AppHandle, kind: String, accelerator: String) ->
     Ok(())
 }
 
+#[tauri::command]
+pub fn set_window_management(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let state = app.state::<ShortcutsState>();
+    let mut prefs = preferences::load(&state.dir);
+    prefs.window_management = enabled;
+    preferences::save(&state.dir, &prefs)?;
+
+    let mut snap = state.snap.lock().unwrap();
+    for (s, _) in snap.drain(..) {
+        let _ = app.global_shortcut().unregister(s);
+    }
+    if enabled {
+        *snap = crate::shortcuts::register_snap(&app);
+    }
+    #[cfg(target_os = "linux")]
+    if crate::platform::wayland() {
+        crate::platform::linux::shortcuts::spawn(app.clone(), state.dir.clone());
+    }
+    Ok(())
+}
+
+/// Sets up what snapping needs and says what the user still has to do ("" = ready).
+#[tauri::command]
+pub fn window_management_note() -> String {
+    crate::platform::host().setup_window_management().unwrap_or_default()
+}
+
 /// While Preferences records a new shortcut, the current ones must not fire
 /// (or even be grabbed, or the key never reaches the Preferences window).
 #[tauri::command]
@@ -208,6 +235,9 @@ pub fn pause_shortcuts(app: tauri::AppHandle) {
     let state = app.state::<ShortcutsState>();
     for slot in [&state.toggle, &state.clipboard, &state.screenshot] {
         let _ = app.global_shortcut().unregister(*slot.lock().unwrap());
+    }
+    for (s, _) in state.snap.lock().unwrap().iter() {
+        let _ = app.global_shortcut().unregister(*s);
     }
     #[cfg(target_os = "linux")]
     if crate::platform::wayland() {
@@ -230,6 +260,9 @@ pub fn resume_shortcuts(app: tauri::AppHandle) {
         if let Err(e) = app.global_shortcut().register(s) {
             eprintln!("resume shortcut: {e}");
         }
+    }
+    for (s, _) in state.snap.lock().unwrap().iter() {
+        let _ = app.global_shortcut().register(*s);
     }
     #[cfg(target_os = "linux")]
     if crate::platform::wayland() {
