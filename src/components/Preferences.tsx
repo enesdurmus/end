@@ -13,6 +13,7 @@ type Prefs = {
   toggle_shortcut: string;
   clipboard_shortcut: string;
   screenshot_shortcut: string;
+  window_management: boolean;
   history_limit: number;
   image_limit: number;
   translate_target: string;
@@ -89,6 +90,28 @@ function HotkeyRow({ label, kind, value, onChanged }: { label: string; kind: Kin
       <Button className="min-w-[180px]" onClick={() => { setRecording(true); setError(""); }}>
         {recording ? "Waiting for keys…" : value.replace(/\+/g, " + ")}
       </Button>
+    </Field>
+  );
+}
+
+function SnapRow({ enabled, onChanged }: { enabled: boolean; onChanged: (on: boolean) => void }) {
+  const [note, setNote] = useState("");
+
+  // setup is idempotent; re-running it also picks up a finished re-login
+  useEffect(() => {
+    if (enabled) invoke<string>("window_management_note").then(setNote);
+    else setNote("");
+  }, [enabled]);
+
+  const toggle = () =>
+    invoke("set_window_management", { enabled: !enabled })
+      .then(() => onChanged(!enabled))
+      .catch((err) => setNote(String(err)));
+
+  return (
+    <Field label="Window Snapping" error={note}
+      hint="Keys: Ctrl+Alt + arrows, U I J K, D F G, E R T, Enter, C">
+      <Button className="min-w-[180px]" onClick={toggle}>{enabled ? "On" : "Off"}</Button>
     </Field>
   );
 }
@@ -219,6 +242,9 @@ export function Preferences({ onClose }: { onClose: () => void }) {
         onChanged={(accel) => setPrefs({ ...prefs, clipboard_shortcut: accel })} />
       <HotkeyRow label="Screenshot" kind="screenshot" value={prefs.screenshot_shortcut}
         onChanged={(accel) => setPrefs({ ...prefs, screenshot_shortcut: accel })} />
+
+      <SnapRow enabled={prefs.window_management}
+        onChanged={(on) => setPrefs({ ...prefs, window_management: on })} />
 
       <LimitRow label="Clipboard History Limit" command="set_history_limit" min={1} max={10000}
         value={prefs.history_limit}

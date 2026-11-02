@@ -14,6 +14,8 @@ pub struct ShortcutsState {
     pub toggle: Mutex<Shortcut>,
     pub clipboard: Mutex<Shortcut>,
     pub screenshot: Mutex<Shortcut>,
+    /// Window-snapping shortcuts; empty while the feature is off.
+    pub snap: Mutex<Vec<(Shortcut, &'static crate::snap::Binding)>>,
     pub dir: PathBuf,
 }
 

@@ -7,6 +7,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, S
 use crate::focus;
 use crate::platform::Platform;
 use crate::preferences;
+use crate::snap;
 use crate::state::ShortcutsState;
 
 pub fn register<R: Runtime>(
@@ -35,12 +36,38 @@ pub fn register<R: Runtime>(
         crate::platform::linux::shortcuts::spawn(app.clone(), dir.clone());
     }
 
+    let snap = if prefs.window_management {
+        std::thread::spawn(|| {
+            if let Some(note) = crate::platform::host().setup_window_management() {
+                eprintln!("window snapping: {note}");
+            }
+        });
+        register_snap(app)
+    } else {
+        Vec::new()
+    };
+
     Ok(ShortcutsState {
         toggle: Mutex::new(toggle),
         clipboard: Mutex::new(clipboard),
         screenshot: Mutex::new(screenshot),
+        snap: Mutex::new(snap),
         dir,
     })
+}
+
+/// A key another app already owns is logged and skipped; it must not take the rest down.
+pub fn register_snap<R: Runtime>(app: &AppHandle<R>) -> Vec<(Shortcut, &'static snap::Binding)> {
+    snap::BINDINGS
+        .iter()
+        .filter_map(|b| {
+            let s = Shortcut::from_str(b.accelerator).ok()?;
+            if let Err(e) = app.global_shortcut().register(s) {
+                eprintln!("snap shortcut {}: {e}", b.accelerator);
+            }
+            Some((s, b))
+        })
+        .collect()
 }
 
 /// True on Wayland, where the portal is the real shortcut path.
@@ -62,6 +89,8 @@ pub fn on_press<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, event: Shor
         "clipboard"
     } else if *shortcut == *state.screenshot.lock().unwrap() {
         "screenshot"
+    } else if let Some((_, b)) = state.snap.lock().unwrap().iter().find(|(s, _)| s == shortcut) {
+        b.id
     } else {
         return;
     };
@@ -75,6 +104,15 @@ pub(crate) fn dispatch<R: Runtime>(app: &AppHandle<R>, id: &str) {
         std::thread::spawn(|| {
             if let Err(e) = crate::platform::host().screenshot_region() {
                 eprintln!("screenshot: {e}");
+            }
+        });
+        return;
+    }
+    if let Some(b) = snap::find(id) {
+        // shells out and talks D-Bus, so keep it off the caller's thread
+        std::thread::spawn(move || {
+            if let Err(e) = crate::platform::host().place_window(b.action) {
+                eprintln!("snap: {e}");
             }
         });
         return;

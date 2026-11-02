@@ -8,6 +8,7 @@ mod desktop;
 mod icons;
 mod input;
 mod screenshot;
+mod snap;
 mod search;
 pub(crate) mod shortcuts;
 
@@ -79,6 +80,14 @@ impl Platform for Linux {
 
     fn screenshot_region(&self) -> Result<(), String> {
         screenshot::region()
+    }
+
+    fn place_window(&self, action: crate::snap::Action) -> Result<(), String> {
+        snap::place(action)
+    }
+
+    fn setup_window_management(&self) -> Option<String> {
+        snap::setup()
     }
 }
 

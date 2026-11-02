@@ -1,0 +1,6 @@
+{
+  "uuid": "end-snap@enesdurmus.github.io",
+  "name": "End window snapping",
+  "description": "Lets End move and resize the focused window (Wayland offers no other way).",
+  "shell-version": ["45", "46", "47", "48", "49", "50"]
+}

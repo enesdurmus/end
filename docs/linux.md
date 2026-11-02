@@ -42,5 +42,13 @@ Preferences → "Accessibility permission" shows whether a paste tool was found.
   region picker and need no helper tool. The result lands on the clipboard (and
   in clipboard history). The portal also saves the file itself (GNOME:
   `~/Pictures/Screenshots`) and End leaves it there.
+- **Window snapping:** Preferences → Window Snapping. Wayland has no API for moving
+  another app's window, so on GNOME End installs a small Shell extension
+  (`~/.local/share/gnome-shell/extensions/end-snap@enesdurmus.github.io`) that
+  moves windows over D-Bus. GNOME only picks up a new extension at login, so log
+  out and back in once after the first enable. Other Wayland compositors are not
+  supported. On X11 it needs `xdotool`, `wmctrl`, `xrandr` and `xprop`. Each key
+  is a separate global shortcut, so on GNOME the portal asks you to confirm them. Ctrl+Alt+arrows may already switch workspaces and
+  Ctrl+Alt+T may open a terminal; rebind those in GNOME settings.
 - **Terminals:** End sends Ctrl+V, which most terminals read as a literal `^V`.
   Bind Ctrl+V to paste in yours.
