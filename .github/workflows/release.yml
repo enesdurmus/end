@@ -63,9 +63,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # A stable signing identity keeps the macOS Accessibility grant across updates;
-      # ad-hoc signatures change every build and silently invalidate it.
-      # Swap the secrets for a Developer ID certificate later; this step then becomes a no-op trust.
       - name: Trust the macOS code-signing certificate
         if: matrix.platform == 'macos-latest'
         env:

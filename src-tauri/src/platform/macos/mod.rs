@@ -88,10 +88,6 @@ impl Platform for MacOs {
     }
 }
 
-/// Registers the running binary with TCC. Adding End by hand with "+" in System
-/// Settings can record a requirement this binary never matches (an ad-hoc signed
-/// universal app has one cdhash per architecture), leaving a switch that is on
-/// but grants nothing.
 fn request_accessibility() {
     unsafe {
         let keys = [kAXTrustedCheckOptionPrompt];
