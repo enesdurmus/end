@@ -63,14 +63,60 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # A stable signing identity keeps the macOS Accessibility grant across updates;
+      # ad-hoc signatures change every build and silently invalidate it.
+      # Swap the secrets for a Developer ID certificate later; this step then becomes a no-op trust.
+      - name: Trust the macOS code-signing certificate
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "::warning::APPLE_CERTIFICATE not set, the macOS build stays ad-hoc signed"
+            exit 0
+          fi
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+            -k /Library/Keychains/System.keychain .github/codesign/end-self-signed.pem
+          echo "APPLE_SIGNING_IDENTITY=End Self-Signed" >> "$GITHUB_ENV"
+
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         with:
           tagName: v__VERSION__
           releaseName: "End v__VERSION__"
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  homebrew:
+    needs: release
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - name: Bump the cask in enesdurmus/homebrew-tap
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN not set, skipping the cask bump"
+            exit 0
+          fi
+          version=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName | sed 's/^v//')
+          gh release download "v$version" --repo "$GITHUB_REPOSITORY" -p "End_${version}_universal.dmg" -D dl
+          sha=$(sha256sum "dl/End_${version}_universal.dmg" | cut -d' ' -f1)
+          gh repo clone enesdurmus/homebrew-tap tap
+          cd tap
+          sed -i -E "s/^  version \".*\"/  version \"$version\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/end.rb
+          if git diff --quiet; then
+            echo "cask already at $version"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "end $version"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/enesdurmus/homebrew-tap.git" HEAD
