@@ -28,8 +28,9 @@ Preferences, history and snippets are stored locally on disk.
 
 Download a build from [Releases](https://github.com/enesdurmus/End/releases).
 
-- **macOS**: open the `.dmg` and drag End to Applications. The build isn't
-  notarized, so run `xattr -cr /Applications/End.app` once, or right-click → Open.
+- **macOS**: `brew install --cask enesdurmus/tap/end`, or open the `.dmg` and
+  drag End to Applications. The build isn't notarized, so run
+  `xattr -cr /Applications/End.app` once, or right-click → Open.
 - **Linux**: use the `.AppImage` (`chmod +x End_*.AppImage && ./End_*.AppImage`)
   or the `.deb`. Optional helper tools and Wayland notes: [docs/linux.md](docs/linux.md).
 
