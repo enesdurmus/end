@@ -1,4 +1,5 @@
 use super::{AppEntry, Platform};
+use std::ffi::c_void;
 use std::process::Command;
 
 mod apps;
@@ -64,6 +65,7 @@ impl Platform for MacOs {
     }
 
     fn open_accessibility_settings(&self) -> Result<(), String> {
+        request_accessibility();
         Command::new("open")
             .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
             .spawn()
@@ -86,7 +88,49 @@ impl Platform for MacOs {
     }
 }
 
+/// Registers the running binary with TCC. Adding End by hand with "+" in System
+/// Settings can record a requirement this binary never matches (an ad-hoc signed
+/// universal app has one cdhash per architecture), leaving a switch that is on
+/// but grants nothing.
+fn request_accessibility() {
+    unsafe {
+        let keys = [kAXTrustedCheckOptionPrompt];
+        let values = [kCFBooleanTrue];
+        let options = CFDictionaryCreate(
+            std::ptr::null(),
+            keys.as_ptr(),
+            values.as_ptr(),
+            1,
+            &raw const kCFTypeDictionaryKeyCallBacks,
+            &raw const kCFTypeDictionaryValueCallBacks,
+        );
+        if options.is_null() {
+            return;
+        }
+        AXIsProcessTrustedWithOptions(options);
+        CFRelease(options);
+    }
+}
+
 #[link(name = "ApplicationServices", kind = "framework")]
 extern "C" {
     fn AXIsProcessTrusted() -> bool;
+    fn AXIsProcessTrustedWithOptions(options: *const c_void) -> bool;
+    static kAXTrustedCheckOptionPrompt: *const c_void;
+}
+
+#[link(name = "CoreFoundation", kind = "framework")]
+extern "C" {
+    static kCFBooleanTrue: *const c_void;
+    static kCFTypeDictionaryKeyCallBacks: c_void;
+    static kCFTypeDictionaryValueCallBacks: c_void;
+    fn CFDictionaryCreate(
+        allocator: *const c_void,
+        keys: *const *const c_void,
+        values: *const *const c_void,
+        num_values: isize,
+        key_callbacks: *const c_void,
+        value_callbacks: *const c_void,
+    ) -> *mut c_void;
+    fn CFRelease(cf: *mut c_void);
 }
