@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/enesdurmus/end/compare/v0.5.1...v0.6.0) (2026-11-19)
+
+
+### Features
+
+* **ui:** compact window with a flat, monospace look ([#76](https://github.com/enesdurmus/end/issues/76)) ([9b218cf](https://github.com/enesdurmus/end/commit/9b218cf0ccc6e686349985520a3b42dd3a431ec3))
+
 ## [0.5.1](https://github.com/enesdurmus/end/compare/v0.5.0...v0.5.1) (2026-11-18)
 
 
