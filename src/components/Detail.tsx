@@ -46,36 +46,36 @@ export function Detail({ result: r }: { result?: Result }) {
   return (
     <div>
       <div className="flex items-center gap-4">
-        <AppIcon title={r.title} src={r.icon} className="w-[52px] h-[52px]" />
+        <AppIcon title={r.title} src={r.icon} className="w-[40px] h-[40px]" />
         <div className="min-w-0">
-          <div className="text-[17px] leading-tight truncate">{r.title}</div>
-          <div className="text-[13px] mt-1 text-fg-dim">{KIND[r.type]}</div>
+          <div className="text-[14px] leading-tight truncate">{r.title}</div>
+          <div className="text-[11.5px] mt-1 text-fg-dim">{KIND[r.type]}</div>
         </div>
       </div>
 
       <div className="flex gap-2.5 mt-5">
-        <Button variant="primary" className="h-[38px]" onClick={() => r.run()}>
-          <Icon name="play" size={15} />Open
+        <Button variant="primary" className="h-[30px]" onClick={() => r.run()}>
+          <Icon name="play" size={13} />Open
         </Button>
         {path && (
           <>
-            <Button className="h-[38px]"
+            <Button className="h-[30px]"
               onClick={() => revealItemInDir(path).then(() => invoke("close_launcher"))}>
-              <Icon name="folder" size={15} />Show in Folder
+              <Icon name="folder" size={13} />Show in Folder
             </Button>
-            <Button className="h-[38px]" onClick={() => runActions.copy(path)}>
-              <Icon name="copy" size={15} />Copy Path
+            <Button className="h-[30px]" onClick={() => runActions.copy(path)}>
+              <Icon name="copy" size={13} />Copy Path
             </Button>
           </>
         )}
       </div>
 
       <div className="mt-6">
-        <div className="text-sm text-[#c0c6dc] mb-2">Details</div>
+        <div className="text-[11px] uppercase tracking-wider text-fg-dim mb-2">Details</div>
         {rows.map(([icon, label, value]) => (
-          <div key={label} className="grid grid-cols-[96px_1fr] items-start gap-3 py-[7px] text-[12.5px]">
-            <span className="flex items-center gap-2.5 text-[#b4bbd3]"><Icon name={icon} size={15} />{label}</span>
-            <span className="text-fg-dim break-all">{value}</span>
+          <div key={label} className="grid grid-cols-[96px_1fr] items-start gap-3 py-[5px] text-[11.5px]">
+            <span className="flex items-center gap-2.5 text-[#b4bbd3]"><Icon name={icon} size={13} />{label}</span>
+            <span className="text-fg-dim [overflow-wrap:anywhere]">{value}</span>
           </div>
         ))}
       </div>

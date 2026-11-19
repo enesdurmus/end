@@ -17,14 +17,14 @@ export function Row({ rowRef, selected, icon, title, sub, right, onMouseMove, on
       onMouseMove={onMouseMove}
       onClick={onClick}
       className={
-        "flex items-center gap-3 px-3 py-[7px] rounded-lg cursor-default border border-transparent " +
+        "flex items-center gap-2.5 px-2.5 py-[5px] rounded cursor-default border border-transparent " +
         (selected ? "surface-row" : "")
       }
     >
       {icon}
       <div className="flex-1 min-w-0">
-        <div className="text-[14.5px] leading-tight truncate">{title}</div>
-        {sub && <div className="text-[12.5px] leading-tight mt-1 text-fg-dim truncate">{sub}</div>}
+        <div className="text-[13px] leading-tight truncate">{title}</div>
+        {sub && <div className="text-[11px] leading-tight mt-0.5 text-fg-dim truncate">{sub}</div>}
       </div>
       {right}
     </div>

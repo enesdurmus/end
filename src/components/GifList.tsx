@@ -29,7 +29,7 @@ export function GifList({ results, selected, onSelect }: { results: Result[]; se
             selected={i === selected}
             {...mouse(i, r)}
             icon={
-              <img className="flex-none w-16 h-12 rounded-lg object-cover bg-sel"
+              <img className="flex-none w-14 h-10 rounded object-cover bg-sel"
                 src={r.icon ? src(r.icon) : undefined} alt="" loading="lazy" />
             }
             title={r.title}

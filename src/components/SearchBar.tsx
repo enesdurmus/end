@@ -1,5 +1,4 @@
 import { Ref } from "react";
-import { Icon } from "./ui/Icon";
 
 export function SearchBar({
   value,
@@ -15,16 +14,16 @@ export function SearchBar({
   inputRef?: Ref<HTMLInputElement>;
 }) {
   return (
-    <div className="flex-none mx-4 mt-3.5 h-[42px] flex items-center gap-3 px-3.5 rounded-[10px] surface-field transition-colors focus-within:brightness-125">
-      <Icon name="search" size={20} className="text-[#c0c6dc] flex-none" />
+    <div className="flex-none mx-3 mt-3 h-[36px] flex items-center gap-2.5 px-3 rounded-md surface-field transition-colors focus-within:brightness-125">
+      <span className="flex-none text-accent font-semibold">&gt;</span>
       {badge && (
-        <span className="flex-none px-2 py-[2px] rounded-md text-[12px] font-medium bg-sel text-fg whitespace-nowrap">
+        <span className="flex-none px-2 py-[2px] rounded text-[11px] font-medium bg-sel text-fg whitespace-nowrap">
           {badge}
         </span>
       )}
       <input
         ref={inputRef}
-        className="w-full h-full border-0 outline-none bg-transparent text-fg text-[15px] font-normal placeholder:text-[#7e87a8]"
+        className="w-full h-full border-0 outline-none bg-transparent text-fg text-[13.5px] font-normal placeholder:text-[#5f6678]"
         autoFocus
         placeholder={placeholder}
         value={value}

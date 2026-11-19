@@ -14,7 +14,7 @@ function Glyphs({ text }: { text: string }) {
 
 export function Kbd({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center justify-center gap-1.5 min-w-[26px] h-6 px-2 surface-chip rounded-md text-xs">
+    <span className="inline-flex items-center justify-center gap-1 min-w-[20px] h-[18px] px-1.5 surface-chip rounded text-[10.5px]">
       {typeof children === "string" ? <Glyphs text={children} /> : children}
     </span>
   );

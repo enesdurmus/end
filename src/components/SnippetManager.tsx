@@ -14,7 +14,7 @@ export function SnippetManager() {
   return (
     <Window>
       <div className="scroll-thin flex-1 min-h-0 overflow-y-auto p-5">
-      <h3 className="m-0 mb-4 text-[15px] font-medium">Snippets</h3>
+      <h3 className="m-0 mb-4 text-[14px] font-medium">Snippets</h3>
       {items.map((s, i) => (
         <div key={i} className="flex gap-2 mb-2">
           <Input value={s.keyword} placeholder="keyword"
