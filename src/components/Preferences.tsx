@@ -4,10 +4,8 @@ import { Window } from "./ui/Window";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Kbd } from "./ui/Kbd";
-import { Select } from "./ui/Select";
 import { Icon, IconName } from "./ui/Icon";
 import { StatusBar } from "./StatusBar";
-import { LANGUAGES } from "../lib/languages";
 
 type Prefs = {
   toggle_shortcut: string;
@@ -16,7 +14,6 @@ type Prefs = {
   window_management: boolean;
   history_limit: number;
   image_limit: number;
-  translate_target: string;
   gif_dir: string;
 };
 type Kind = "toggle" | "clipboard" | "screenshot";
@@ -202,27 +199,6 @@ function LimitRow({ label, command, min, max, hint, value, onChanged }: LimitRow
   );
 }
 
-function TranslateRow({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Prefs>) => void }) {
-  const [error, setError] = useState("");
-
-  const commit = (code: string) => {
-    invoke("set_translate_prefs", { target: code, provider: null })
-      .then(() => { setError(""); onChanged({ translate_target: code }); })
-      .catch((err) => setError(String(err)));
-  };
-
-  return (
-    <PrefRow label="Translate To" hint="Language text is translated into" error={error}>
-      <Select
-        className="w-[180px]"
-        value={prefs.translate_target}
-        options={LANGUAGES.map((l) => ({ value: l.code, label: l.name }))}
-        onChange={commit}
-      />
-    </PrefRow>
-  );
-}
-
 function GifRow({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Prefs>) => void }) {
   const [dir, setDir] = useState(prefs.gif_dir);
   const [error, setError] = useState("");
@@ -302,17 +278,13 @@ export function Preferences({ onClose }: { onClose: () => void }) {
             onChanged={(accel) => patch({ screenshot_shortcut: accel })} />
         </Section>
 
-        <Section title="Clipboard" icon="clipboard">
-          <LimitRow label="History Limit" command="set_history_limit" min={1} max={10000}
+        <Section title="Storage" icon="folder">
+          <LimitRow label="Clipboard History" command="set_history_limit" min={1} max={10000}
             hint="Text entries to keep"
             value={prefs.history_limit} onChanged={(n) => patch({ history_limit: n })} />
-          <LimitRow label="Image Limit" command="set_image_limit" min={0} max={1000}
-            hint="Kept separately; 0 keeps none"
+          <LimitRow label="Clipboard Images" command="set_image_limit" min={0} max={1000}
+            hint="Images to keep; 0 keeps none"
             value={prefs.image_limit} onChanged={(n) => patch({ image_limit: n })} />
-        </Section>
-
-        <Section title="Translate & GIFs" icon="swap">
-          <TranslateRow prefs={prefs} onChanged={patch} />
           <GifRow prefs={prefs} onChanged={patch} />
         </Section>
 
