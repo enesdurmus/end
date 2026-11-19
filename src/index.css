@@ -3,15 +3,15 @@
 @theme {
   --font-sans: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
-  --color-bg: #0b0d12;
-  --color-fg: #d8dbe4;
-  --color-fg-dim: #7d8496;
-  --color-sel: rgba(150, 160, 190, 0.12);
-  --color-hair: rgba(150, 160, 190, 0.14);
-  --color-accent: #7c84ff;
+  --color-bg: #0a0e1d;
+  --color-fg: #dfe3f2;
+  --color-fg-dim: #8a93b2;
+  --color-sel: rgba(170, 180, 215, 0.12);
+  --color-hair: rgba(170, 180, 215, 0.12);
+  --color-accent: #8b7dff;
   --color-success: #40c057;
   --color-danger: #e03131;
-  --radius-window: 10px;
+  --radius-window: 14px;
 }
 
 html { -webkit-font-smoothing: antialiased; }
@@ -19,38 +19,49 @@ html, body, #root { margin: 0; height: 100%; background: transparent; }
 * { box-sizing: border-box; }
 
 @utility window-glass {
-  background: #0f1117;
-  box-shadow: inset 0 0 0 1px rgba(150, 160, 190, 0.16), 0 6px 16px rgba(0, 0, 0, 0.5);
+  background:
+    radial-gradient(120% 70% at 0% 0%, rgba(124, 100, 255, 0.14), transparent 60%),
+    radial-gradient(90% 60% at 100% 100%, rgba(70, 90, 230, 0.07), transparent 60%),
+    linear-gradient(160deg, #232734 0%, #0f1219 75%);
+  box-shadow:
+    inset 0 0 0 1px rgba(170, 180, 215, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 16px rgba(140, 120, 230, 0.25),
+    0 8px 20px rgba(12, 6, 30, 0.5);
 }
 @utility surface-field {
-  background: rgba(150, 160, 190, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(150, 160, 190, 0.14);
+  background: linear-gradient(180deg, rgba(170, 180, 215, 0.14), rgba(170, 180, 215, 0.06));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: box-shadow 150ms;
+  &:focus-within, &:focus {
+    box-shadow: inset 0 0 0 1px rgba(139, 125, 255, 0.45), 0 0 0 3px rgba(139, 125, 255, 0.12), 0 2px 6px rgba(0, 0, 0, 0.3);
+  }
 }
 @utility surface-chip {
-  background: rgba(150, 160, 190, 0.07);
-  box-shadow: inset 0 0 0 1px rgba(150, 160, 190, 0.12);
-  color: #aab0c2;
+  background: linear-gradient(180deg, rgba(170, 180, 215, 0.22), rgba(170, 180, 215, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 3px rgba(0, 0, 0, 0.3);
+  color: #c0c6dc;
 }
 @utility surface-active {
-  background: rgba(124, 132, 255, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(124, 132, 255, 0.55);
-  color: #e4e6ff;
+  background: linear-gradient(135deg, #6a58ff 0%, #5143f0 45%, #3a2cc8 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 14px rgba(84, 62, 255, 0.45);
+  color: #fff;
 }
 @utility surface-row {
-  background: rgba(124, 132, 255, 0.13);
-  box-shadow: inset 2px 0 0 #7c84ff;
+  background: linear-gradient(90deg, rgba(88, 62, 225, 0.7), rgba(44, 46, 170, 0.4));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 2px 0 0 #a397ff, 0 3px 10px rgba(70, 50, 220, 0.3);
 }
 @utility card {
-  background: rgba(150, 160, 190, 0.035);
-  box-shadow: inset 0 0 0 1px rgba(150, 160, 190, 0.1);
-  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(170, 180, 215, 0.08), rgba(170, 180, 215, 0.03));
+  box-shadow: inset 0 0 0 1px rgba(170, 180, 215, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 6px 18px rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
 }
 
 /* opaque dropdown list (Select): it floats over other content, so no transparency */
 @utility popover {
-  background: #161922;
-  box-shadow: inset 0 0 0 1px rgba(150, 160, 190, 0.18), 0 10px 24px rgba(0, 0, 0, 0.55);
-  border-radius: 6px;
+  background: linear-gradient(180deg, #2b3040, #1a1e2b);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+  border-radius: 8px;
 }
 
 /* number fields use our own look, not the native spinner */
