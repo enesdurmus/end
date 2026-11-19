@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0](https://github.com/enesdurmus/end/compare/v0.6.0...v0.7.0) (2026-11-19)
+
+
+### Features
+
+* **prefs:** fold the GIF folder into a Storage section ([aa95afa](https://github.com/enesdurmus/end/commit/aa95afa6788fbdb0bdd5eb53d23e11322226657e))
+* **prefs:** sectioned settings page and drop the KLIPY key field ([f55012b](https://github.com/enesdurmus/end/commit/f55012b71198dbac8b20256c790c6794c632ac1d))
+* **ui:** bring back the gradients and tidy up Preferences ([3cac303](https://github.com/enesdurmus/end/commit/3cac303d85708ba763c66f4927e43b0f8d66061c))
+* **ui:** bring back the purple gradients with a little more depth ([5cf8b80](https://github.com/enesdurmus/end/commit/5cf8b8044f959c1a0289c30843f7bc7ff884184f))
+
 ## [0.6.0](https://github.com/enesdurmus/end/compare/v0.5.1...v0.6.0) (2026-11-19)
 
 
