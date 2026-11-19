@@ -1,13 +1,11 @@
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Window } from "./ui/Window";
 import { Button } from "./ui/Button";
-import { Field } from "./ui/Field";
 import { Input } from "./ui/Input";
-import { Select } from "./ui/Select";
-import { Icon } from "./ui/Icon";
+import { Kbd } from "./ui/Kbd";
+import { Icon, IconName } from "./ui/Icon";
 import { StatusBar } from "./StatusBar";
-import { LANGUAGES } from "../lib/languages";
 
 type Prefs = {
   toggle_shortcut: string;
@@ -16,9 +14,6 @@ type Prefs = {
   window_management: boolean;
   history_limit: number;
   image_limit: number;
-  translate_target: string;
-  translate_provider: string;
-  klipy_api_key: string;
   gif_dir: string;
 };
 type Kind = "toggle" | "clipboard" | "screenshot";
@@ -38,6 +33,50 @@ function acceleratorFromEvent(e: KeyboardEvent, held: Set<string>): string | nul
   if (parts.length === 0) return null;
   parts.push(e.code);
   return parts.join("+");
+}
+
+const keyParts = (accel: string) =>
+  accel.split("+").map((k) => k.replace(/^(Key|Digit)/, "").replace(/^Arrow/, ""));
+
+function PrefRow({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-6 px-3.5 py-2.5 min-h-[50px] border-t border-hair first:border-t-0">
+      <div className="min-w-0">
+        <div className="text-[12.5px]">{label}</div>
+        {error ? <div className="text-danger text-[11px] mt-0.5">{error}</div>
+          : hint && <div className="text-fg-dim text-[11px] mt-0.5">{hint}</div>}
+      </div>
+      <div className="flex-none">{children}</div>
+    </div>
+  );
+}
+
+function Section({ title, icon, children }: { title: string; icon: IconName; children: ReactNode }) {
+  return (
+    <section className="mb-4">
+      <div className="flex items-center gap-1.5 mb-1.5 px-1 text-[10.5px] uppercase tracking-wider text-fg-dim">
+        <Icon name={icon} size={12} />{title}
+      </div>
+      <div className="card">{children}</div>
+    </section>
+  );
+}
+
+function Switch({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      role="switch" aria-checked={on} aria-label={label} onClick={onToggle}
+      className={
+        "relative block w-[34px] h-[20px] rounded-full cursor-pointer transition-colors " +
+        (on ? "surface-active" : "surface-field")
+      }
+    >
+      <span className={
+        "absolute top-[3px] left-[3px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform " +
+        (on ? "translate-x-[14px]" : "opacity-60")
+      } />
+    </button>
+  );
 }
 
 function HotkeyRow({ label, kind, value, onChanged }: { label: string; kind: Kind; value: string; onChanged: (accel: string) => void }) {
@@ -86,11 +125,18 @@ function HotkeyRow({ label, kind, value, onChanged }: { label: string; kind: Kin
   }, [recording, kind, onChanged]);
 
   return (
-    <Field label={label} error={error}>
-      <Button className="min-w-[180px]" onClick={() => { setRecording(true); setError(""); }}>
-        {recording ? "Waiting for keys…" : value.replace(/\+/g, " + ")}
-      </Button>
-    </Field>
+    <PrefRow label={label} error={error}>
+      <button
+        onClick={() => { setRecording(true); setError(""); }}
+        title="Click to record a new shortcut"
+        className={
+          "inline-flex items-center gap-1 h-[28px] px-2 rounded-md cursor-pointer transition-colors " +
+          (recording ? "surface-active text-[11.5px]" : "hover:bg-[#aab4d6]/10")
+        }
+      >
+        {recording ? "Press keys…" : keyParts(value).map((k) => <Kbd key={k}>{k}</Kbd>)}
+      </button>
+    </PrefRow>
   );
 }
 
@@ -109,10 +155,9 @@ function SnapRow({ enabled, onChanged }: { enabled: boolean; onChanged: (on: boo
       .catch((err) => setNote(String(err)));
 
   return (
-    <Field label="Window Snapping" error={note}
-      hint="Keys: Ctrl+Alt + arrows, U I J K, D F G, E R T, Enter, C">
-      <Button className="min-w-[180px]" onClick={toggle}>{enabled ? "On" : "Off"}</Button>
-    </Field>
+    <PrefRow label="Window Snapping" hint="Ctrl+Alt + arrows, U I J K, D F G, E R T, Enter, C" error={note}>
+      <Switch on={enabled} onToggle={toggle} label="Window Snapping" />
+    </PrefRow>
   );
 }
 
@@ -143,137 +188,110 @@ function LimitRow({ label, command, min, max, hint, value, onChanged }: LimitRow
   };
 
   return (
-    <Field label={label} hint={hint} error={error}>
+    <PrefRow label={label} hint={hint} error={error}>
       <Input
-        type="number" min={min} max={max} className="w-24" value={text}
+        type="number" min={min} max={max} className="w-20 text-right" value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
       />
-    </Field>
+    </PrefRow>
   );
 }
 
-function TranslateRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Prefs>) => void }) {
-  const [error, setError] = useState("");
-
-  // send only what changed; the backend leaves the omitted field alone
-  const commit = (next: Partial<Prefs>) => {
-    invoke("set_translate_prefs", {
-      target: next.translate_target ?? null,
-      provider: next.translate_provider ?? null,
-    })
-      .then(() => { setError(""); onChanged(next); })
-      .catch((err) => setError(String(err)));
-  };
-
-  return (
-    <>
-      <Field label="Translate To">
-        <Select
-          value={prefs.translate_target}
-          options={LANGUAGES.map((l) => ({ value: l.code, label: l.name }))}
-          onChange={(v) => commit({ translate_target: v })}
-        />
-      </Field>
-      <Field label="Translation Engine" error={error}>
-        <Select
-          value={prefs.translate_provider}
-          // mirrors the Provider enum in src-tauri/src/translate.rs
-          options={[{ value: "google", label: "Google" }]}
-          onChange={(v) => commit({ translate_provider: v })}
-        />
-      </Field>
-    </>
-  );
-}
-
-function GifRows({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Prefs>) => void }) {
-  const [key, setKey] = useState(prefs.klipy_api_key);
+function GifRow({ prefs, onChanged }: { prefs: Prefs; onChanged: (p: Partial<Prefs>) => void }) {
   const [dir, setDir] = useState(prefs.gif_dir);
   const [error, setError] = useState("");
 
-  const commit = (next: Partial<Prefs>) => {
-    invoke("set_gif_prefs", {
-      klipyApiKey: next.klipy_api_key ?? null,
-      gifDir: next.gif_dir ?? null,
-    })
-      .then(() => { setError(""); onChanged(next); })
+  const commit = () => {
+    if (dir === prefs.gif_dir) return;
+    invoke("set_gif_prefs", { klipyApiKey: null, gifDir: dir })
+      .then(() => { setError(""); onChanged({ gif_dir: dir }); })
       .catch((err) => setError(String(err)));
   };
 
   return (
-    <>
-      <Field label="KLIPY API Key" hint="Boş bırakırsan uygulamanın kendi anahtarı kullanılır.">
-        <Input value={key} onChange={(e) => setKey(e.target.value)} onBlur={() => commit({ klipy_api_key: key })} />
-      </Field>
-      <Field label="GIF Folder" hint="Boş bırakırsan varsayılan klasör kullanılır." error={error}>
-        <Input value={dir} onChange={(e) => setDir(e.target.value)} onBlur={() => commit({ gif_dir: dir })} />
-      </Field>
-    </>
+    <PrefRow label="GIF Folder" hint="Where saved GIFs are kept" error={error}>
+      <div className="flex items-center gap-1.5">
+        <Input
+          className="w-[220px]" value={dir} placeholder="Default"
+          onChange={(e) => setDir(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        />
+        <Button className="h-[30px] w-[30px] p-0!" title="Open folder" aria-label="Open GIF folder"
+          onClick={() => invoke("open_gif_dir")}>
+          <Icon name="folder" size={14} />
+        </Button>
+      </div>
+    </PrefRow>
+  );
+}
+
+function AccessRow() {
+  const [granted, setGranted] = useState<boolean | null>(null);
+  const recheck = () => invoke<boolean>("check_accessibility").then(setGranted);
+  useEffect(() => { recheck(); }, []);
+
+  return (
+    <PrefRow label="Accessibility" hint="Needed to paste into other apps">
+      <div className="flex items-center gap-2">
+        <span className="flex items-center gap-1.5 text-[11.5px] text-fg-dim">
+          <span className={"w-1.5 h-1.5 rounded-full " + (granted ? "bg-success" : granted === false ? "bg-danger" : "bg-fg-dim")} />
+          {granted === null ? "Checking…" : granted ? "Granted" : "Not granted"}
+        </span>
+        {granted === false && (
+          <>
+            <Button className="h-[26px]" onClick={recheck}>Re-check</Button>
+            <Button className="h-[26px]" variant="primary" onClick={() => invoke("open_accessibility_settings")}>Open Settings</Button>
+          </>
+        )}
+      </div>
+    </PrefRow>
   );
 }
 
 export function Preferences({ onClose }: { onClose: () => void }) {
   const [prefs, setPrefs] = useState<Prefs | null>(null);
-  const [accessible, setAccessible] = useState<boolean | null>(null);
-
-  const recheck = () => invoke<boolean>("check_accessibility").then(setAccessible);
 
   useEffect(() => {
     invoke<Prefs>("get_preferences").then(setPrefs);
-    recheck();
   }, []);
 
   if (!prefs) return null;
+  const patch = (p: Partial<Prefs>) => setPrefs({ ...prefs, ...p });
 
   return (
     <Window>
-      <div className="scroll-thin flex-1 min-h-0 overflow-y-auto p-5">
-      <div className="flex items-center gap-3 mb-5">
-        <Button className="h-8 w-8 p-0!" aria-label="Back" onClick={onClose}><Icon name="left" size={16} /></Button>
+      <div className="flex-none flex items-center gap-2.5 px-4 pt-3.5 pb-3">
+        <Button className="h-7 w-7 p-0!" aria-label="Back" onClick={onClose}><Icon name="left" size={14} /></Button>
         <h3 className="m-0 text-[14px] font-medium">Preferences</h3>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-6">
-      <HotkeyRow label="Toggle End" kind="toggle" value={prefs.toggle_shortcut}
-        onChanged={(accel) => setPrefs({ ...prefs, toggle_shortcut: accel })} />
-      <HotkeyRow label="Clipboard History" kind="clipboard" value={prefs.clipboard_shortcut}
-        onChanged={(accel) => setPrefs({ ...prefs, clipboard_shortcut: accel })} />
-      <HotkeyRow label="Screenshot" kind="screenshot" value={prefs.screenshot_shortcut}
-        onChanged={(accel) => setPrefs({ ...prefs, screenshot_shortcut: accel })} />
+      <div className="scroll-thin flex-1 min-h-0 overflow-y-auto px-4 pb-2">
+        <Section title="Shortcuts" icon="command">
+          <HotkeyRow label="Toggle End" kind="toggle" value={prefs.toggle_shortcut}
+            onChanged={(accel) => patch({ toggle_shortcut: accel })} />
+          <HotkeyRow label="Clipboard History" kind="clipboard" value={prefs.clipboard_shortcut}
+            onChanged={(accel) => patch({ clipboard_shortcut: accel })} />
+          <HotkeyRow label="Screenshot" kind="screenshot" value={prefs.screenshot_shortcut}
+            onChanged={(accel) => patch({ screenshot_shortcut: accel })} />
+        </Section>
 
-      <SnapRow enabled={prefs.window_management}
-        onChanged={(on) => setPrefs({ ...prefs, window_management: on })} />
+        <Section title="Storage" icon="folder">
+          <LimitRow label="Clipboard History" command="set_history_limit" min={1} max={10000}
+            hint="Text entries to keep"
+            value={prefs.history_limit} onChanged={(n) => patch({ history_limit: n })} />
+          <LimitRow label="Clipboard Images" command="set_image_limit" min={0} max={1000}
+            hint="Images to keep; 0 keeps none"
+            value={prefs.image_limit} onChanged={(n) => patch({ image_limit: n })} />
+          <GifRow prefs={prefs} onChanged={patch} />
+        </Section>
 
-      <LimitRow label="Clipboard History Limit" command="set_history_limit" min={1} max={10000}
-        value={prefs.history_limit}
-        onChanged={(n) => setPrefs({ ...prefs, history_limit: n })} />
-
-      <LimitRow label="Clipboard Image Limit" command="set_image_limit" min={0} max={1000}
-        hint="Images are kept separately; 0 keeps none."
-        value={prefs.image_limit}
-        onChanged={(n) => setPrefs({ ...prefs, image_limit: n })} />
-
-      <TranslateRows prefs={prefs} onChanged={(p) => setPrefs({ ...prefs, ...p })} />
-
-      <GifRows prefs={prefs} onChanged={(p) => setPrefs({ ...prefs, ...p })} />
-      </div>
-
-      <div className="mt-5 pt-4">
-        <div className="text-[13px] mb-2">
-          Accessibility permission:{" "}
-          <span className={accessible ? "text-success" : "text-danger"}>
-            {accessible === null ? "checking…" : accessible ? "Granted" : "Not granted"}
-          </span>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={recheck}>Re-check</Button>
-          {!accessible && (
-            <Button onClick={() => invoke("open_accessibility_settings")}>Open System Settings</Button>
-          )}
-        </div>
-      </div>
+        <Section title="System" icon="settings">
+          <SnapRow enabled={prefs.window_management} onChanged={(on) => patch({ window_management: on })} />
+          <AccessRow />
+        </Section>
       </div>
       <StatusBar left="" hints={[["Back", "esc"]]} />
     </Window>
