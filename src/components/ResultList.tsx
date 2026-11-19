@@ -27,7 +27,7 @@ export function ResultList({ results, selected, onSelect }: { results: Result[];
             rowRef={i === selected ? selRef : null}
             selected={i === selected}
             {...mouse(i, r)}
-            icon={<AppIcon title={r.title} src={r.icon} className="w-9 h-9" />}
+            icon={<AppIcon title={r.title} src={r.icon} className="w-7 h-7" />}
             title={r.title}
             sub={describe(r)}
             right={i === selected ? <Kbd>↵</Kbd> : i < ROW_SHORTCUTS ? <Kbd>{`⌘${i + 1}`}</Kbd> : null}

@@ -23,12 +23,12 @@ export function TranslateView({ results, selected, onSelect, entry, meanings, lo
         ) : entry && body ? (
           <>
             <div className="text-fg-dim text-[13px] mb-3 whitespace-pre-wrap break-words">{entry.source}</div>
-            <p className="m-0 text-[17px] leading-[1.5] text-fg whitespace-pre-wrap break-words">{body}</p>
+            <p className="m-0 text-[14px] leading-[1.5] text-fg whitespace-pre-wrap break-words">{body}</p>
             {meanings.length > 0 && (
               <div className="mt-6">
-                <div className="text-sm text-[#c0c6dc] mb-2">Meanings</div>
+                <div className="text-[11px] uppercase tracking-wider text-fg-dim mb-2">Meanings</div>
                 {meanings.map((m) => (
-                  <div key={m.pos} className="grid grid-cols-[88px_1fr] gap-3 py-[7px] text-[12.5px]">
+                  <div key={m.pos} className="grid grid-cols-[88px_1fr] gap-3 py-[5px] text-[11.5px]">
                     <span className="text-[#b4bbd3]">{m.pos}</span>
                     <span className="text-fg-dim">{m.terms.join(", ")}</span>
                   </div>

@@ -8,7 +8,7 @@ import { basename } from "../lib/results";
 export function ClipPreview({ clip }: { clip: Clip }) {
   if (clip.kind === "text") {
     return (
-      <pre className="m-0 font-mono text-[13px] leading-[1.5] text-fg whitespace-pre-wrap break-words">
+      <pre className="m-0 font-mono text-[12px] leading-[1.5] text-fg whitespace-pre-wrap break-words">
         {clip.text.slice(0, 5000)}
       </pre>
     );
@@ -20,7 +20,7 @@ export function ClipPreview({ clip }: { clip: Clip }) {
         <img
           src={convertFileSrc(clip.path)}
           alt=""
-          className="flex-1 min-h-0 w-full object-contain rounded-lg bg-[#aab4d6]/10"
+          className="flex-1 min-h-0 w-full object-contain rounded-md bg-[#aab4d6]/10"
         />
         <div className="flex-none text-fg-dim text-xs text-center">
           {clip.width} × {clip.height}

@@ -13,7 +13,7 @@ export function ClipboardView({ results, selected, onSelect }: { results: Result
         clip ? (
           <ClipPreview clip={clip} />
         ) : body ? (
-          <pre className="m-0 font-mono text-[13px] leading-[1.5] text-fg whitespace-pre-wrap break-words">
+          <pre className="m-0 font-mono text-[12px] leading-[1.5] text-fg whitespace-pre-wrap break-words">
             {body.slice(0, 5000)}
           </pre>
         ) : (

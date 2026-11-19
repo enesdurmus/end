@@ -58,7 +58,7 @@ export function Select({ value, options, onChange, className = "" }: {
               onMouseMove={() => setHi(i)}
               onClick={() => pick(o.value)}
               className={
-                "px-3 py-1.5 rounded-md text-[13px] cursor-default " +
+                "px-3 py-1 rounded text-[12px] cursor-default " +
                 (i === hi ? "surface-row " : "") +
                 (o.value === value ? "text-white" : "")
               }

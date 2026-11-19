@@ -9,19 +9,19 @@ const ICON: Record<Tab, IconName> = {
 
 export function Tabs({ active, onPick, onSettings }: { active: Tab; onPick: (t: Tab) => void; onSettings: () => void }) {
   return (
-    <div className="flex-none flex items-center gap-2.5 px-4 pt-4 pb-3.5">
+    <div className="flex-none flex items-center gap-1.5 px-3 pt-2.5 pb-2.5">
       {TABS.map((t) => (
         <button
           key={t}
           onClick={() => onPick(t)}
           className={
-            "inline-flex items-center gap-2 h-[31px] px-3.5 rounded-[10px] text-[12.5px] cursor-default transition-colors " +
+            "inline-flex items-center gap-1.5 h-[24px] px-2.5 rounded text-[11.5px] cursor-default transition-colors " +
             (t === active
               ? "surface-active text-white"
               : "surface-chip hover:text-fg hover:brightness-125")
           }
         >
-          <Icon name={ICON[t]} size={15} />
+          <Icon name={ICON[t]} size={13} />
           {t}
         </button>
       ))}
@@ -29,9 +29,9 @@ export function Tabs({ active, onPick, onSettings }: { active: Tab; onPick: (t: 
         onClick={onSettings}
         title="Preferences"
         aria-label="Preferences"
-        className="ml-auto grid place-items-center h-[31px] w-[31px] rounded-[10px] surface-chip cursor-default hover:text-fg hover:brightness-125"
+        className="ml-auto grid place-items-center h-[24px] w-[24px] rounded surface-chip cursor-default hover:text-fg hover:brightness-125"
       >
-        <Icon name="settings" size={16} />
+        <Icon name="settings" size={14} />
       </button>
     </div>
   );

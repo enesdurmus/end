@@ -16,11 +16,11 @@ export function LangBar({ source, target, detected, onSource, onTarget, onSwap }
   const auto = { value: "auto", label: detected ? `Detect (${languageName(detected)})` : "Detect language" };
   return (
     <div className="flex-none flex items-center gap-2.5 px-4 pt-4 pb-3.5">
-      <Select className="w-[210px]" value={source} options={[auto, ...languages]} onChange={onSource} />
-      <Button className="h-[34px] w-[34px] p-0!" title="Swap languages (⌘S)" aria-label="Swap languages" onClick={onSwap}>
-        <Icon name="swap" size={16} />
+      <Select className="w-[180px]" value={source} options={[auto, ...languages]} onChange={onSource} />
+      <Button className="h-[30px] w-[30px] p-0!" title="Swap languages (⌘S)" aria-label="Swap languages" onClick={onSwap}>
+        <Icon name="swap" size={14} />
       </Button>
-      <Select className="w-[210px]" value={target} options={languages} onChange={onTarget} />
+      <Select className="w-[180px]" value={target} options={languages} onChange={onTarget} />
     </div>
   );
 }

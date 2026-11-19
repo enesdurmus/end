@@ -6,7 +6,7 @@ export function Field({ label, hint, error, children }: {
 }) {
   return (
     <div className="mb-3">
-      <div className="text-[13px] text-[#aab0dc] mb-1.5">{label}</div>
+      <div className="text-[11.5px] text-fg-dim mb-1.5">{label}</div>
       {children}
       {error ? <div className="text-danger text-xs mt-1">{error}</div>
         : hint && <div className="text-fg-dim text-xs mt-1">{hint}</div>}

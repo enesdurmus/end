@@ -1,55 +1,56 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  --color-bg: #0a0e1d;
-  --color-fg: #dfe3f2;
-  --color-fg-dim: #8a93b2;
-  --color-sel: rgba(170, 180, 215, 0.12);
-  --color-hair: rgba(170, 180, 215, 0.12);
-  --color-accent: #5b64ff;
+  --font-sans: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  --color-bg: #0b0d12;
+  --color-fg: #d8dbe4;
+  --color-fg-dim: #7d8496;
+  --color-sel: rgba(150, 160, 190, 0.12);
+  --color-hair: rgba(150, 160, 190, 0.14);
+  --color-accent: #7c84ff;
   --color-success: #40c057;
   --color-danger: #e03131;
-  --radius-window: 20px;
+  --radius-window: 10px;
 }
 
 html { -webkit-font-smoothing: antialiased; }
 html, body, #root { margin: 0; height: 100%; background: transparent; }
 * { box-sizing: border-box; }
 
-/* every surface is just a gradient plus a shadow */
 @utility window-glass {
-  background: linear-gradient(160deg, #232734 0%, #0f1219 75%);
-  box-shadow: 0 0 20px rgba(140, 120, 230, 0.25), 0 10px 24px rgba(12, 6, 30, 0.5);
+  background: #0f1117;
+  box-shadow: inset 0 0 0 1px rgba(150, 160, 190, 0.16), 0 6px 16px rgba(0, 0, 0, 0.5);
 }
 @utility surface-field {
-  background: linear-gradient(180deg, rgba(170, 180, 215, 0.14), rgba(170, 180, 215, 0.06));
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  background: rgba(150, 160, 190, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(150, 160, 190, 0.14);
 }
 @utility surface-chip {
-  background: linear-gradient(180deg, rgba(170, 180, 215, 0.22), rgba(170, 180, 215, 0.1));
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  color: #c0c6dc;
+  background: rgba(150, 160, 190, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(150, 160, 190, 0.12);
+  color: #aab0c2;
 }
 @utility surface-active {
-  background: linear-gradient(135deg, #6a58ff 0%, #5143f0 45%, #3a2cc8 100%);
-  box-shadow: 0 6px 18px rgba(84, 62, 255, 0.45);
+  background: rgba(124, 132, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(124, 132, 255, 0.55);
+  color: #e4e6ff;
 }
 @utility surface-row {
-  background: linear-gradient(90deg, rgba(88, 62, 225, 0.7), rgba(44, 46, 170, 0.4));
-  box-shadow: 0 4px 14px rgba(70, 50, 220, 0.3);
+  background: rgba(124, 132, 255, 0.13);
+  box-shadow: inset 2px 0 0 #7c84ff;
 }
 @utility card {
-  background: linear-gradient(180deg, rgba(170, 180, 215, 0.08), rgba(170, 180, 215, 0.03));
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  border-radius: 12px;
+  background: rgba(150, 160, 190, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(150, 160, 190, 0.1);
+  border-radius: 6px;
 }
 
 /* opaque dropdown list (Select): it floats over other content, so no transparency */
 @utility popover {
-  background: linear-gradient(180deg, #2b3040, #1a1e2b);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
-  border-radius: 10px;
+  background: #161922;
+  box-shadow: inset 0 0 0 1px rgba(150, 160, 190, 0.18), 0 10px 24px rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
 }
 
 /* number fields use our own look, not the native spinner */
@@ -59,7 +60,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
 
 /* text-entry controls (Input, Select) */
 @utility control {
-  @apply surface-field rounded-[10px] px-3 py-2 text-[13px] text-fg outline-none [color-scheme:dark] focus:brightness-125;
+  @apply surface-field rounded-md px-2.5 py-1.5 text-[12px] text-fg outline-none [color-scheme:dark] focus:brightness-125;
 }
 
 /* ince scrollbar (::-webkit-scrollbar utility'lenemiyor) */

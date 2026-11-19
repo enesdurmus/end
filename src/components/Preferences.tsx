@@ -232,7 +232,7 @@ export function Preferences({ onClose }: { onClose: () => void }) {
       <div className="scroll-thin flex-1 min-h-0 overflow-y-auto p-5">
       <div className="flex items-center gap-3 mb-5">
         <Button className="h-8 w-8 p-0!" aria-label="Back" onClick={onClose}><Icon name="left" size={16} /></Button>
-        <h3 className="m-0 text-[17px] font-medium">Preferences</h3>
+        <h3 className="m-0 text-[14px] font-medium">Preferences</h3>
       </div>
 
       <div className="grid grid-cols-2 gap-x-6">
